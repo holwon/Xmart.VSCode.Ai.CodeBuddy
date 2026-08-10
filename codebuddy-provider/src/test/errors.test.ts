@@ -32,4 +32,35 @@ describe('mapCodeBuddyError', () => {
     expect(mapping.kind).toBe('unknown');
     expect(mapping.message).toContain('invalid request parameters');
   });
+
+  it('lets 11217 win even when an HTTP 401 is also present', () => {
+    const mapping = mapCodeBuddyError(new CodeBuddyApiError(CODE_LOGIN_IN_PROGRESS, 'login ing', 401));
+    expect(mapping.kind).toBe('no-permissions');
+    expect(mapping.message).toContain('login is still in progress');
+    expect(mapping.message).not.toContain('accessToken');
+  });
+
+  it('accepts duck-typed error objects (not just CodeBuddyApiError)', () => {
+    const mapping = mapCodeBuddyError({ code: 11133, msg: 'bad', httpStatus: 400 });
+    expect(mapping.kind).toBe('unknown');
+    expect(mapping.message).toContain('bad');
+  });
+
+  it('falls back to code when msg is missing on an unknown error', () => {
+    const mapping = mapCodeBuddyError({ code: 999, httpStatus: 500 });
+    expect(mapping.kind).toBe('unknown');
+    expect(mapping.message).toContain('999');
+  });
+
+  it('falls back to unknown error when everything is empty', () => {
+    const mapping = mapCodeBuddyError({});
+    expect(mapping.kind).toBe('unknown');
+    expect(mapping.message).toContain('unknown error');
+  });
+
+  it('treats an empty-string msg as missing', () => {
+    const mapping = mapCodeBuddyError({ msg: '', httpStatus: 500 });
+    expect(mapping.kind).toBe('unknown');
+    expect(mapping.message).toContain('unknown error');
+  });
 });

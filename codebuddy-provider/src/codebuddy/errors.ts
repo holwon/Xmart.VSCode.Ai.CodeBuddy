@@ -10,14 +10,20 @@
  * - 404              → the model was not found
  * - anything else    → generic upstream failure
  *
- * Pure module (no vscode dependency): it maps a `CodeBuddyApiError` to a
- * plain description the provider can turn into a `LanguageModelError`.
+ * Pure module (no vscode dependency): it maps a duck-typed error
+ * (`CodeBuddyErrorLike`, structurally compatible with `CodeBuddyApiError`)
+ * to a plain description the provider can turn into a `LanguageModelError`.
  */
-
-import { CodeBuddyApiError } from './client';
 
 /** CodeBuddy code returned while the account login flow is still in progress. */
 export const CODE_LOGIN_IN_PROGRESS = 11217;
+
+/** Duck-typed view of an error: anything with these fields can be mapped. */
+export interface CodeBuddyErrorLike {
+  code?: number;
+  msg?: string;
+  httpStatus?: number;
+}
 
 export interface ErrorMapping {
   /** Stable category the provider maps to a LanguageModelError factory. */
@@ -28,8 +34,13 @@ export interface ErrorMapping {
 
 /**
  * Map a CodeBuddy API error to a user-facing category and message.
+ *
+ * Accepts a duck-typed error (`CodeBuddyApiError` is structurally compatible)
+ * so any error shape carrying a code/httpStatus can be mapped. Priority: the
+ * 11217 "login in progress" code wins over HTTP status; otherwise HTTP status
+ * decides between auth (401/403), not-found (404) and generic failure.
  */
-export function mapCodeBuddyError(error: CodeBuddyApiError): ErrorMapping {
+export function mapCodeBuddyError(error: CodeBuddyErrorLike): ErrorMapping {
   if (error.code === CODE_LOGIN_IN_PROGRESS) {
     return {
       kind: 'no-permissions',
@@ -45,11 +56,11 @@ export function mapCodeBuddyError(error: CodeBuddyApiError): ErrorMapping {
   if (error.httpStatus === 404) {
     return {
       kind: 'not-found',
-      message: `CodeBuddy model not found: ${error.msg}`,
+      message: `CodeBuddy model not found: ${error.msg ?? ''}`,
     };
   }
   return {
     kind: 'unknown',
-    message: `CodeBuddy request failed: ${error.msg}`,
+    message: `CodeBuddy request failed: ${error.msg || String(error.code ?? 'unknown error')}`,
   };
 }
