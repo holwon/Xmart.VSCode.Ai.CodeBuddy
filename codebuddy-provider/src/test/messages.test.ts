@@ -4,6 +4,8 @@ import {
   toCodeBuddyMessages,
   toCodeBuddyToolChoice,
   toCodeBuddyTools,
+  TOOL_MODE_AUTO,
+  TOOL_MODE_REQUIRED,
 } from '../codebuddy/messages';
 import { ChatRequestMessage } from '../codebuddy/types';
 
@@ -159,11 +161,11 @@ describe('toCodeBuddyTools', () => {
 
 describe('toCodeBuddyToolChoice', () => {
   it('maps Required (2) to "required"', () => {
-    expect(toCodeBuddyToolChoice(2)).toBe('required');
+    expect(toCodeBuddyToolChoice(TOOL_MODE_REQUIRED)).toBe('required');
   });
 
-  it('leaves Auto (1) and undefined as the upstream default', () => {
-    expect(toCodeBuddyToolChoice(1)).toBeUndefined();
+  it('leaves Auto and undefined as the upstream default', () => {
+    expect(toCodeBuddyToolChoice(TOOL_MODE_AUTO)).toBeUndefined();
     expect(toCodeBuddyToolChoice(undefined)).toBeUndefined();
   });
 });

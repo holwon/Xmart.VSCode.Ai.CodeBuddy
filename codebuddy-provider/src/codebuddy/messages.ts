@@ -137,13 +137,19 @@ export function toCodeBuddyTools(tools: readonly ChatTool[] | undefined): CodeBu
 }
 
 /**
+ * VS Code `LanguageModelChatToolMode` enum values (mirrored as named
+ * constants so the conversion logic stays free of the vscode module).
+ */
+export const TOOL_MODE_AUTO = 1;
+export const TOOL_MODE_REQUIRED = 2;
+
+/**
  * Convert the VS Code tool mode into a CodeBuddy `tool_choice`.
  *
- * `LanguageModelChatToolMode.Auto` (1) → omitted (upstream default is auto);
- * `LanguageModelChatToolMode.Required` (2) → `"required"`.
+ * `Auto` → omitted (upstream default is auto); `Required` → `"required"`.
  */
 export function toCodeBuddyToolChoice(toolMode: number | undefined): string | undefined {
-  if (toolMode === 2) {
+  if (toolMode === TOOL_MODE_REQUIRED) {
     return 'required';
   }
   return undefined;
