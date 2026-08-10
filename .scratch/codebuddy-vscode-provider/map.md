@@ -29,6 +29,7 @@
 - 旧代理服务的退役步骤——等 agent 模式跑通后
 - 会话历史/上下文管理:原型已验证由 VS Code 托管,无需额外工作
 - 思考深度(reasoning effort):已入 06 号票(方案 A 原生选择器),spec 已发布(`spec-thinking-effort.md`,ready-for-agent),先验证 proposed API 可用性
+- 代码审查问题修复:spec 已发布(`spec-code-review-fixes.md`,ready-for-agent),含空响应检测等 14 项
 
 ## Out of scope
 
