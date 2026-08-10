@@ -34,7 +34,7 @@
           "type": "string",
           "default": "",
           "secret": true,
-          "markdownDescription": "CodeBuddy access token (from the official CodeBuddy plugin login state or the CodeBuddy CLI). Sent as `Authorization: Bearer <token>`."
+          "markdownDescription": "CodeBuddy access token (from the CodeBuddy console/backend or the official plugin/CLI login). Sent as `Authorization: Bearer <token>`. When empty, the `CODEBUDDY_AUTH_TOKEN` environment variable is used."
         },
         "codebuddy.userId": {
           "type": "string",

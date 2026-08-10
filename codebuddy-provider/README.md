@@ -23,7 +23,7 @@ Open VS Code settings (User or Workspace) and set:
 
 | Setting | Description |
 |---|---|
-| `codebuddy.accessToken` | Your CodeBuddy access token (stored securely). Required. |
+| `codebuddy.accessToken` | Your CodeBuddy access token (stored securely). Required unless the env var below is set. |
 | `codebuddy.userId` | Your CodeBuddy account uid (optional — when empty the `X-No-User-Id: 1` fallback is used). |
 
 ```json
@@ -32,6 +32,18 @@ Open VS Code settings (User or Workspace) and set:
   "codebuddy.userId": ""
 }
 ```
+
+Alternatively, set the `CODEBUDDY_AUTH_TOKEN` environment variable (same convention as the CodeBuddy CLI) — it is used when the setting is empty. Note: environment variables are captured when VS Code starts, so restart VS Code after changing it.
+
+### Getting a token
+
+CodeBuddy does not offer public API keys; the access token comes from a CodeBuddy account (the `ck_...` value created in the CodeBuddy console/backend, or the token the official plugin/CLI holds). Possible sources:
+
+- **CodeBuddy console / backend** — create the token there and paste it into `codebuddy.accessToken` (recommended).
+- **Official VS Code plugin login state** (desktop app v5.3.8+, plain JSON): `%APPDATA%\CodeBuddyExtension\Data\Public\auth\workbuddy-desktop.info` — contains `auth.accessToken`.
+- **CodeBuddy CLI** — `~/.codebuddy/` login files, or the `CODEBUDDY_AUTH_TOKEN` environment variable.
+
+> ⚠️ The token is account-level sensitive credentials — never commit it, share it, or paste it into logs/chat.
 
 ## Usage
 

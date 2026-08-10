@@ -30,6 +30,13 @@ import { ChatMessagePart, ChatRequestMessage, ChatTool } from './codebuddy/types
 
 const VENDOR = 'codebuddy';
 
+/**
+ * Environment-variable fallback for the access token, matching the CodeBuddy
+ * CLI convention (see research/02). Takes effect only when the
+ * `codebuddy.accessToken` setting is empty.
+ */
+export const CODEBUDDY_TOKEN_ENV_VAR = 'CODEBUDDY_AUTH_TOKEN';
+
 // ─── Diagnostics ───
 // Output channel that logs what the provider receives from VS Code and what
 // it sends to CodeBuddy (without tokens or full message contents), so request
@@ -50,10 +57,12 @@ export function disposeLog(): void {
 
 function createClient(): CodeBuddyClient {
   const config = vscode.workspace.getConfiguration('codebuddy');
-  const accessToken = config.get<string>('accessToken', '');
+  const accessToken =
+    config.get<string>('accessToken', '') || process.env[CODEBUDDY_TOKEN_ENV_VAR] || '';
   if (!accessToken) {
     throw vscode.LanguageModelError.NoPermissions(
-      'CodeBuddy access token is not configured. Set "codebuddy.accessToken" in your settings.',
+      'CodeBuddy access token is not configured. Set "codebuddy.accessToken" in your settings, ' +
+        `or the "${CODEBUDDY_TOKEN_ENV_VAR}" environment variable.`,
     );
   }
   return new CodeBuddyClient({
