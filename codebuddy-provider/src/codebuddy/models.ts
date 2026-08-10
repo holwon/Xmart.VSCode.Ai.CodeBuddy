@@ -20,8 +20,6 @@ export interface ModelInfo {
   maxInputTokens: number;
   maxOutputTokens: number;
   toolCalling: boolean;
-  /** DeepSeek-family models stream `delta.reasoning_content`. */
-  supportsReasoning: boolean;
   detail?: string;
   /**
    * Reasoning-effort levels the model exposes in the VS Code model picker
@@ -33,9 +31,6 @@ export interface ModelInfo {
   defaultReasoningEffort?: string;
 }
 
-/** Canonical VS Code reasoning-effort levels this provider exposes. */
-export const REASONING_EFFORT_LEVELS = ['off', 'low', 'medium', 'high'] as const;
-
 export const CODEBUDDY_MODELS: ModelInfo[] = [
   {
     id: 'deepseek-v4-pro',
@@ -45,7 +40,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 1_000_000,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: true,
     reasoningEffortLevels: ['off', 'low', 'medium', 'high'],
     defaultReasoningEffort: 'medium',
     detail: 'DeepSeek V4 Pro (CodeBuddy cloud)',
@@ -58,7 +52,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 1_000_000,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: true,
     reasoningEffortLevels: ['off', 'low', 'medium', 'high'],
     defaultReasoningEffort: 'medium',
     detail: 'DeepSeek V4 Flash (CodeBuddy cloud)',
@@ -71,7 +64,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 1_000_000,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: false,
     detail: 'GLM-5.2 (CodeBuddy cloud)',
   },
   {
@@ -82,7 +74,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 131_072,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: false,
   },
   {
     id: 'glm-5v-turbo',
@@ -92,7 +83,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 131_072,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: false,
   },
   {
     id: 'kimi-k2.7',
@@ -102,7 +92,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 262_144,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: true,
     detail: 'Kimi K2.7 (CodeBuddy cloud)',
   },
   {
@@ -113,7 +102,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 204_800,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: false,
   },
   {
     id: 'hy3',
@@ -123,7 +111,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 262_144,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: true,
     detail: 'Hunyuan 3 (reasoning_effort: high enables deep thinking)',
   },
   {
@@ -134,7 +121,6 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 262_144,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: true,
   },
   {
     id: 'hy3-preview-agent',
@@ -144,6 +130,5 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxInputTokens: 262_144,
     maxOutputTokens: 8192,
     toolCalling: true,
-    supportsReasoning: true,
   },
 ];

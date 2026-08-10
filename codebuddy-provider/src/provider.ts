@@ -131,10 +131,11 @@ function toChatMessageParts(content: readonly unknown[]): ChatMessagePart[] {
     } else if (item instanceof vscode.LanguageModelToolResultPart) {
       parts.push({ kind: 'tool-result', callId: item.callId, content: flattenToolResult(item.content) });
     } else if (item && typeof item === 'object') {
-      // Duck-typing fallback: VS Code's production build can minify class
-      // names, so `instanceof` may not always hold across versions. Also
-      // handles parts with a `value` (e.g. thinking parts) by surfacing the
-      // text instead of JSON-serializing the whole object.
+      // Duck-typing fallback: match on shape rather than class identity as a
+      // cross-version defensive measure (the vscode classes are not minified
+      // in the extension host, but relying on shape keeps this robust to API
+      // churn). Also handles parts with a `value` (e.g. thinking parts) by
+      // surfacing the text instead of JSON-serializing the whole object.
       const obj = item as { callId?: unknown; name?: unknown; input?: unknown; content?: unknown; value?: unknown };
       if (typeof obj.callId === 'string' && typeof obj.name === 'string') {
         parts.push({ kind: 'tool-call', callId: obj.callId, name: obj.name, input: (obj.input as object) ?? {} });

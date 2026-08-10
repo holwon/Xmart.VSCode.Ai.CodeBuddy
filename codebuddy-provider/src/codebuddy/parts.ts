@@ -2,9 +2,9 @@
  * Shared part-dispatch logic: identify VS Code message parts by duck typing
  * and extract their text, independent of the vscode module.
  *
- * Why duck typing: VS Code's extension host may minify class names across
- * versions, so `instanceof` against `vscode.LanguageModelTextPart` etc. is
- * not guaranteed to hold in every build. Matching on shape (a `value`
+ * Why duck typing: match on shape rather than class identity as a
+ * cross-version defensive measure (the vscode classes are not minified in the
+ * extension host, but relying on shape keeps this robust to API churn). Matching on shape (a `value`
  * string, a `callId`+`name` pair, a `callId`+array `content`) is a defensive
  * cross-version fallback.
  *
