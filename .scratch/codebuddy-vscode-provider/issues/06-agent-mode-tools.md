@@ -24,3 +24,5 @@
 - CodeBuddy 支持 `reasoning_effort`,但 hy3 系只有 "high" 真正生效;DeepSeek 系经 reasoning_content 返回思考
 
 已决策(grilling):**方案 A(原生选择器)**,先验证 proposed API 在 VS Code 1.132 可用性,再完整实现。
+
+**Spec 已发布**:`spec-thinking-effort.md`(Status: ready-for-agent)。测试接缝:提取纯逻辑模块(reasoning 映射),provider 薄胶水;范围不含空响应 bug(独立处理)。
