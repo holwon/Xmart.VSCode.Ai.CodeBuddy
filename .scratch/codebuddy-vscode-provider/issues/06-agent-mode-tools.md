@@ -1,7 +1,7 @@
 # agent 模式工具调用接入
 
 - Type: prototype
-- Status: claimed
+- Status: resolved
 - Blocked by: 01, 04
 
 ## Question
@@ -13,6 +13,22 @@
 - 双向映射:VS Code 的 `LanguageModelChatTool`(name/description/inputSchema)↔ CodeBuddy 的 `tools: [{type:'function', function:{...}}]`;`ToolCallPart` ↔ `tool_calls`;`ToolResultPart` ↔ `role: "tool"` 消息
 - 模型元信息须声明 `capabilities.toolCalling = true`,否则 agent 模式不可选
 - 验证:agent 模式下能读写文件、执行命令
+
+## Answer
+
+已实现(resolved 2026-08-10)。代码核对确认 7 项链路全部完整:
+
+1. **工具经 `options.tools` 传入**:`toChatTool` + `toCodeBuddyTools`(provider.ts:117-122, 187;messages.ts:173-187)
+2. **ToolCallPart 生成**:`ToolCallAccumulator` 跨 chunk 累积 `delta.tool_calls`,流结束时 `progress.report(new LanguageModelToolCallPart(...))`(provider.ts:202, 237-240, 263-265;toolcalls.ts)
+3. **ToolResultPart 回传**:`dispatchPart` 鸭子识别 → `flattenPartArray` 展平 → `role:"tool"` 消息(parts.ts:59-62;messages.ts:145-158)
+4. **callId 配对**:`pendingToolCallIds` 精确匹配,无主结果折叠进 user 文本(messages.ts:92, 135-137, 145-147, 159-166)
+5. **capabilities.toolCalling**:全部 10 个模型 `toolCalling: true`(models.ts;provider.ts:77-80)
+6. **toolMode**:`TOOL_MODE_AUTO/REQUIRED` 命名常量 → `tool_choice` 映射(messages.ts:199-210)
+7. **测试覆盖**:messages.test.ts(工具消息转换)、toolcalls.test.ts(跨 chunk 累积/排序/丢弃/raw 包装)等
+
+**运行时验证**(2026-08-10 日志):28 次真实请求中大量 `toolCalls=1/2`,agent 模式工具调用(读文件、执行命令等)真实运转,多轮工具调用中间轮次(contentChars=0, toolCalls=1)正常,最终轮次均成功返回文字。86/86 测试通过。
+
+> 思考深度(reasoning effort)为独立 spec(`spec-thinking-effort.md`,ready-for-agent),代码已实现基础(configurationSchema + reasoning_effort 映射),UI 验证待用户反馈。
 
 ## 衍生:思考深度(reasoning effort)
 
