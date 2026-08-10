@@ -35,9 +35,20 @@ export function stringifyToolResult(content: unknown): string {
 
 /**
  * Convert VS Code chat messages into CodeBuddy messages, preserving order.
+ *
+ * Tool results are **matched by callId** against the assistant tool calls
+ * seen so far, and only emitted as `role: "tool"` messages when their callId
+ * corresponds to an outstanding assistant call. VS Code interleaves tool
+ * results across user messages in ways that do not always align 1:1 with the
+ * preceding assistant message, so a naive positional pass produces invalid
+ * sequences (`tool` without a preceding `assistant` call, or two `tool`
+ * messages for one call) that CodeBuddy rejects with `code 11133`. Any tool
+ * result that cannot be matched is folded into the user text instead.
  */
 export function toCodeBuddyMessages(messages: readonly ChatRequestMessage[]): CodeBuddyChatMessage[] {
   const result: CodeBuddyChatMessage[] = [];
+  // callIds of assistant tool calls that have been sent but not yet answered.
+  const pendingToolCallIds = new Set<string>();
 
   for (const message of messages) {
     let text = '';
@@ -66,17 +77,6 @@ export function toCodeBuddyMessages(messages: readonly ChatRequestMessage[]): Co
       }
     }
 
-    // Tool results become standalone `role: "tool"` messages so they can carry
-    // their `tool_call_id`. They keep their position relative to the
-    // assistant message because the input order is preserved.
-    for (const toolResult of toolResults) {
-      result.push({
-        role: 'tool',
-        content: toolResult.content,
-        tool_call_id: toolResult.callId,
-      });
-    }
-
     if (message.role === 'assistant') {
       const assistantMessage: CodeBuddyChatMessage = {
         role: 'assistant',
@@ -84,16 +84,34 @@ export function toCodeBuddyMessages(messages: readonly ChatRequestMessage[]): Co
       };
       if (toolCalls.length > 0) {
         assistantMessage.tool_calls = toolCalls;
+        for (const call of toolCalls) {
+          pendingToolCallIds.add(call.id);
+        }
       }
       result.push(assistantMessage);
-    } else if (text !== '') {
-      // A user message that carries only tool results has no user text; it is
-      // represented solely by the `role: "tool"` messages above. Empty user
-      // messages are meaningless to the upstream API, so they are skipped.
-      result.push({
-        role: 'user',
-        content: text,
-      });
+    } else {
+      // user message: emit tool results only for outstanding assistant calls,
+      // in encounter order; fold anything unmatched back into the user text.
+      const matchedCallIds = new Set<string>();
+      for (const toolResult of toolResults) {
+        if (pendingToolCallIds.has(toolResult.callId)) {
+          pendingToolCallIds.delete(toolResult.callId);
+          matchedCallIds.add(toolResult.callId);
+          result.push({
+            role: 'tool',
+            content: toolResult.content,
+            tool_call_id: toolResult.callId,
+          });
+        }
+      }
+      const unmatched = toolResults.filter((tr) => !matchedCallIds.has(tr.callId));
+      if (unmatched.length > 0) {
+        const folded = unmatched.map((tr) => `[tool result ${tr.callId}]\n${tr.content}`).join('\n');
+        text = text === '' ? folded : `${folded}\n\n${text}`;
+      }
+      if (text !== '') {
+        result.push({ role: 'user', content: text });
+      }
     }
   }
 

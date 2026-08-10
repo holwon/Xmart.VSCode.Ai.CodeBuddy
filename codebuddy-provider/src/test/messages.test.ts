@@ -43,6 +43,30 @@ describe('toCodeBuddyMessages', () => {
     ]);
   });
 
+  it('folds a tool result that has no matching outstanding call into user text', () => {
+    const messages: ChatRequestMessage[] = [
+      { role: 'user', parts: [{ kind: 'tool-result', callId: 'call_orphan', content: 'stale result' }] },
+    ];
+    const result = toCodeBuddyMessages(messages);
+    expect(result).toEqual([{ role: 'user', content: '[tool result call_orphan]\nstale result' }]);
+  });
+
+  it('does not emit a second tool message for a call already answered', () => {
+    const messages: ChatRequestMessage[] = [
+      {
+        role: 'assistant',
+        parts: [{ kind: 'tool-call', callId: 'call_1', name: 'f', input: {} }],
+      },
+      { role: 'user', parts: [{ kind: 'tool-result', callId: 'call_1', content: 'first result' }] },
+      { role: 'user', parts: [{ kind: 'tool-result', callId: 'call_1', content: 'duplicate result' }] },
+    ];
+    const result = toCodeBuddyMessages(messages);
+    // call_1 is consumed by the first result; the duplicate folds into text.
+    const toolMessages = result.filter((m) => m.role === 'tool');
+    expect(toolMessages).toEqual([{ role: 'tool', content: 'first result', tool_call_id: 'call_1' }]);
+    expect(result.some((m) => m.role === 'user' && m.content?.includes('duplicate result'))).toBe(true);
+  });
+
   it('converts tool-call parts into assistant tool_calls with JSON-string arguments', () => {
     const messages: ChatRequestMessage[] = [
       {
@@ -62,16 +86,21 @@ describe('toCodeBuddyMessages', () => {
     ]);
   });
 
-  it('emits tool results as role:tool messages with tool_call_id', () => {
+  it('emits tool results as role:tool messages with tool_call_id (when the call is outstanding)', () => {
     const messages: ChatRequestMessage[] = [
+      { role: 'assistant', parts: [{ kind: 'tool-call', callId: 'call_1', name: 'f', input: {} }] },
       { role: 'user', parts: [{ kind: 'tool-result', callId: 'call_1', content: 'file contents' }] },
     ];
     const result = toCodeBuddyMessages(messages);
-    expect(result).toEqual([{ role: 'tool', content: 'file contents', tool_call_id: 'call_1' }]);
+    expect(result).toEqual([
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'f', arguments: '{}' } }] },
+      { role: 'tool', content: 'file contents', tool_call_id: 'call_1' },
+    ]);
   });
 
   it('keeps the user text and emits tool results separately for mixed user messages', () => {
     const messages: ChatRequestMessage[] = [
+      { role: 'assistant', parts: [{ kind: 'tool-call', callId: 'call_2', name: 'f', input: {} }] },
       {
         role: 'user',
         parts: [
@@ -82,6 +111,7 @@ describe('toCodeBuddyMessages', () => {
     ];
     const result = toCodeBuddyMessages(messages);
     expect(result).toEqual([
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call_2', type: 'function', function: { name: 'f', arguments: '{}' } }] },
       { role: 'tool', content: '{"lines":3}', tool_call_id: 'call_2' },
       { role: 'user', content: 'based on that, summarize' },
     ]);
