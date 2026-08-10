@@ -27,6 +27,24 @@ import { ChatMessagePart, ChatRequestMessage, ChatTool } from './codebuddy/types
 
 const VENDOR = 'codebuddy';
 
+// ─── Diagnostics ───
+// Output channel that logs what the provider receives from VS Code and what
+// it sends to CodeBuddy (without tokens or full message contents), so request
+// failures can be diagnosed from the "CodeBuddy Provider" output panel.
+let outputChannel: vscode.OutputChannel | undefined;
+
+function log(message: string): void {
+  if (!outputChannel) {
+    outputChannel = vscode.window.createOutputChannel('CodeBuddy Provider');
+  }
+  outputChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
+}
+
+export function disposeLog(): void {
+  outputChannel?.dispose();
+  outputChannel = undefined;
+}
+
 function createClient(): CodeBuddyClient {
   const config = vscode.workspace.getConfiguration('codebuddy');
   const accessToken = config.get<string>('accessToken', '');
@@ -141,12 +159,41 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
     },
 
     provideLanguageModelChatResponse: async (model, messages, options, progress, token) => {
+      log(
+        `→ request model=${model.id} messages=${messages.length} ` +
+          `tools=${(options.tools ?? []).length} toolMode=${options.toolMode}`,
+      );
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        const role = m.role === vscode.LanguageModelChatMessageRole.Assistant ? 'assistant' : 'user';
+        const parts = m.content.map((p) =>
+          typeof p === 'string' ? `str(${p.length})` : ((p as object).constructor?.name ?? 'unknown'),
+        );
+        log(`  [${i}] ${role} parts=${parts.join(',')}`);
+      }
+      log(
+        `  tools=${(options.tools ?? [])
+          .map((t) => `${t.name}(schema:${t.inputSchema ? 'yes' : 'no'},desc:${t.description?.length ?? 0})`)
+          .join(', ')}`,
+      );
+
       const client = createClient();
       const chatMessages = messages.map(toChatRequestMessage);
       const convertedMessages = toCodeBuddyMessages(chatMessages);
       const tools = toCodeBuddyTools(options.tools?.map(toChatTool));
       // A required tool mode only makes sense when tools were actually provided.
       const toolChoice = tools ? toCodeBuddyToolChoice(options.toolMode) : undefined;
+
+      log(
+        `  → codebuddy messages: ${convertedMessages
+          .map(
+            (m) =>
+              `${m.role}(${m.content === null ? 'null' : `${(m.content as string).length}ch`}` +
+              `${m.tool_calls ? `,${m.tool_calls.length}tc` : ''}${m.tool_call_id ? ',tid' : ''})`,
+          )
+          .join(' | ')}`,
+      );
+      log(`  → codebuddy tools: ${tools ? `${tools.length} tools` : 'none'} tool_choice: ${toolChoice ?? 'auto'}`);
 
       const controller = new AbortController();
       if (token.isCancellationRequested) {
@@ -155,6 +202,8 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
       const cancellationSubscription = token.onCancellationRequested(() => controller.abort());
       const toolCalls = new ToolCallAccumulator();
       let reported = false;
+      let eventCount = 0;
+      let contentChars = 0;
 
       try {
         await client.stream(
@@ -166,6 +215,7 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
           },
           {
             onEvent: (payload) => {
+              eventCount += 1;
               const converted = convertResponse(payload) as {
                 choices?: { delta?: Record<string, unknown> }[];
               };
@@ -174,6 +224,7 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
                 return;
               }
               if (typeof delta.content === 'string' && delta.content !== '') {
+                contentChars += delta.content.length;
                 progress.report(new vscode.LanguageModelTextPart(delta.content));
               }
               if (Array.isArray(delta.tool_calls)) {
@@ -189,6 +240,7 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
                 return;
               }
               reported = true;
+              log(`  ← stream done: events=${eventCount} contentChars=${contentChars} toolCalls=${toolCalls.size}`);
               for (const call of toolCalls.toParts()) {
                 progress.report(new vscode.LanguageModelToolCallPart(call.callId, call.name, call.input));
               }
@@ -200,6 +252,10 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
         if (controller.signal.aborted) {
           // User cancelled: complete silently.
           return;
+        }
+        log(`  ← error: ${(error as Error).stack ?? String(error)}`);
+        if (error instanceof CodeBuddyApiError) {
+          log(`    code=${error.code} httpStatus=${error.httpStatus} msg=${error.msg.slice(0, 500)}`);
         }
         if (error instanceof CodeBuddyApiError) {
           throw mapErrorCode(error);

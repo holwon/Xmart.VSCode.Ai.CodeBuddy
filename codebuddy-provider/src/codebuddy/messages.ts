@@ -2,15 +2,15 @@
  * Message & tool conversion between the VS Code chat request shape and the
  * CodeBuddy (OpenAI-compatible) request shape.
  *
- * Message ordering: VS Code hands the provider the conversation newest-first
- * (the most recent user message — which may carry tool results — comes first,
- * followed by the assistant message that made the tool calls, then the
- * original user request). CodeBuddy/OpenAI expects oldest-first with each
- * `role: "tool"` message immediately after the assistant message that called
- * the tool, so the list is reversed before conversion.
+ * VS Code passes the conversation history to the provider **already in
+ * chronological order** (oldest first), with each `role: "tool"` message
+ * immediately after the assistant message that made the tool call. That order
+ * is exactly what CodeBuddy/OpenAI expects, so messages are forwarded as-is —
+ * reordering them (e.g. reversing) makes the upstream API reject the request
+ * with `code 11133` ("tool" messages must follow their assistant message).
  *
- * See `.scratch/codebuddy-vscode-provider/research/01-vscode-lm-provider-api.md`
- * §4 for the tool-call round-trip.
+ * Verified against CodeBuddy `copilot.tencent.com/v2/chat/completions`
+ * (HTTP 400 on tool-first sequences) in 2026-08.
  */
 
 import {
@@ -34,16 +34,12 @@ export function stringifyToolResult(content: unknown): string {
 }
 
 /**
- * Convert VS Code chat messages (newest-first) into CodeBuddy messages
- * (oldest-first, OpenAI semantics).
+ * Convert VS Code chat messages into CodeBuddy messages, preserving order.
  */
 export function toCodeBuddyMessages(messages: readonly ChatRequestMessage[]): CodeBuddyChatMessage[] {
-  // Oldest-first: reverse in place on a copy, never mutate the caller's array.
-  const ordered = [...messages].reverse();
-
   const result: CodeBuddyChatMessage[] = [];
 
-  for (const message of ordered) {
+  for (const message of messages) {
     let text = '';
     const toolCalls: CodeBuddyToolCall[] = [];
     const toolResults: { callId: string; content: string }[] = [];
@@ -71,8 +67,8 @@ export function toCodeBuddyMessages(messages: readonly ChatRequestMessage[]): Co
     }
 
     // Tool results become standalone `role: "tool"` messages so they can carry
-    // their `tool_call_id`. They follow the assistant message in output order
-    // because the source list was reversed above.
+    // their `tool_call_id`. They keep their position relative to the
+    // assistant message because the input order is preserved.
     for (const toolResult of toolResults) {
       result.push({
         role: 'tool',

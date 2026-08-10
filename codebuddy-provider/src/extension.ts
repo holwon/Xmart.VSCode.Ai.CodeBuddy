@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode';
-import { registerCodeBuddyProvider } from './provider';
+import { disposeLog, registerCodeBuddyProvider } from './provider';
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(registerCodeBuddyProvider());
@@ -15,5 +15,5 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
-  // Registered disposables are cleaned up by the extension host automatically.
+  disposeLog();
 }

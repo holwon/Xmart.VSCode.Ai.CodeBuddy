@@ -8,16 +8,39 @@ import {
 import { ChatRequestMessage } from '../codebuddy/types';
 
 describe('toCodeBuddyMessages', () => {
-  it('reverses newest-first VS Code messages into oldest-first order', () => {
-    const newestFirst: ChatRequestMessage[] = [
-      { role: 'user', parts: [{ kind: 'text', text: 'please fix' }] },
-      { role: 'assistant', parts: [{ kind: 'text', text: 'ok' }] },
+  it('preserves the order of VS Code messages as-is', () => {
+    const inOrder: ChatRequestMessage[] = [
       { role: 'user', parts: [{ kind: 'text', text: 'hi' }] },
+      { role: 'assistant', parts: [{ kind: 'text', text: 'ok' }] },
+      { role: 'user', parts: [{ kind: 'text', text: 'please fix' }] },
     ];
-    const result = toCodeBuddyMessages(newestFirst);
+    const result = toCodeBuddyMessages(inOrder);
     expect(result.map((m) => m.content)).toEqual(['hi', 'ok', 'please fix']);
     // Input array must not be mutated.
-    expect(newestFirst[0].parts[0]).toEqual({ kind: 'text', text: 'please fix' });
+    expect(inOrder[0].parts[0]).toEqual({ kind: 'text', text: 'hi' });
+  });
+
+  it('keeps tool results directly after the assistant message that made the calls', () => {
+    const inOrder: ChatRequestMessage[] = [
+      { role: 'user', parts: [{ kind: 'text', text: 'analyze this' }] },
+      {
+        role: 'assistant',
+        parts: [{ kind: 'tool-call', callId: 'call_1', name: 'read_file', input: { path: '/a.txt' } }],
+      },
+      { role: 'user', parts: [{ kind: 'tool-result', callId: 'call_1', content: 'file contents' }] },
+    ];
+    const result = toCodeBuddyMessages(inOrder);
+    expect(result).toEqual([
+      { role: 'user', content: 'analyze this' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{"path":"/a.txt"}' } },
+        ],
+      },
+      { role: 'tool', content: 'file contents', tool_call_id: 'call_1' },
+    ]);
   });
 
   it('converts tool-call parts into assistant tool_calls with JSON-string arguments', () => {

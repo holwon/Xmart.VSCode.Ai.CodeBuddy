@@ -1,15 +1,3 @@
-# AGENTS.md
-
-## Agent skills
-
-### Issue tracker
-
-Issues and specs live as markdown files under `.scratch/<feature>/` in this repo. See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Single-context layout — one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
-
 ## Codebase Memory MCP
 
 **MANDATORY: use Codebase Memory MCP graph tools FIRST — before reading files or making code changes.**
