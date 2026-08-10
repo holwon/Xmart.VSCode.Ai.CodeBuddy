@@ -21,13 +21,13 @@
 
 - [VS Code 语言模型提供程序 API 事实](issues/01-vscode-lm-provider-api.md) — 稳定 API 为 contributes.languageModelChatProviders + registerLanguageModelChatProvider 三方法(信息/响应/token 计数),工具随请求 options 传入,agent 模式要求 capabilities.toolCalling,最低 VS Code 1.96,reasoning 在 stable API 不可表达
 - [CodeBuddy API 协议与认证事实](issues/02-codebuddy-api-protocol.md) — 端点 OpenAI 兼容但必须 stream:true(11101),认证 = Bearer token + X-User-Id,OAuth 无开放 API key,官方插件登录态明文文件可提取 token,工具调用 OpenAI 格式兼容,差异表 12 项核实
+- [最小可行提供程序原型](issues/04-minimal-provider-prototype.md) — 已打包 .vsix 安装到 VS Code 1.132,Copilot Chat 中正常对话+工具调用;排障定位三个 CodeBuddy 协议坑(消息顺序保序、tool 结果按 callId 配对、part 鸭子类型识别),均已修复
 
 ## Not yet specified
 
-- reasoning_content 的呈现:研究已确定 stable API 不可作为独立 part 表达,决定缩小为「拼入文本 / 丢弃」二选一——并入「代理转换逻辑到提供程序的映射」
 - 各模型元信息(上下文窗口、最大输出)的精确值——以「CodeBuddy API 协议与认证事实」的逆向数据为基线,原型实测校准
-- 旧代理服务的退役步骤——等新扩展跑通后
-- 会话历史/上下文管理:预期由 VS Code 托管,原型中验证即可
+- 旧代理服务的退役步骤——等 agent 模式跑通后
+- 会话历史/上下文管理:原型已验证由 VS Code 托管,无需额外工作
 
 ## Out of scope
 
