@@ -32,6 +32,12 @@ export interface CodeBuddyStreamRequest {
   messages: CodeBuddyChatMessage[];
   tools?: CodeBuddyToolDefinition[];
   tool_choice?: string;
+  /**
+   * Reasoning effort for models that support it. `'off'` or undefined means
+   * the upstream default; CodeBuddy accepts low/medium/high (hy3 models only
+   * honor `'high'` — see research/02).
+   */
+  reasoning_effort?: string;
 }
 
 export interface CodeBuddyStreamCallbacks {

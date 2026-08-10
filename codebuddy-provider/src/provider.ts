@@ -60,7 +60,7 @@ function createClient(): CodeBuddyClient {
 }
 
 function toModelInformation(model: ModelInfo): vscode.LanguageModelChatInformation {
-  return {
+  const info: vscode.LanguageModelChatInformation = {
     id: model.id,
     name: model.name,
     family: model.family,
@@ -72,6 +72,37 @@ function toModelInformation(model: ModelInfo): vscode.LanguageModelChatInformati
       toolCalling: model.toolCalling,
     },
   };
+
+  // Model-configuration picker (proposed API): expose the Thinking Effort
+  // selector when the model supports reasoning levels. The user's choice
+  // arrives at provideLanguageModelChatResponse via
+  // `options.modelConfiguration?.reasoningEffort`.
+  if (model.reasoningEffortLevels && model.reasoningEffortLevels.length > 0) {
+    info.configurationSchema = {
+      properties: {
+        reasoningEffort: {
+          type: 'string',
+          title: 'Thinking Effort',
+          enum: model.reasoningEffortLevels,
+          enumItemLabels: model.reasoningEffortLevels.map((level) => capitalize(level)),
+          enumDescriptions: [
+            'Disable extended reasoning for fastest responses',
+            'Light reasoning, faster responses',
+            'Balanced reasoning and speed',
+            'Deep reasoning, slower but more thorough',
+          ].slice(0, model.reasoningEffortLevels.length),
+          default: model.defaultReasoningEffort,
+          group: 'navigation',
+        },
+      },
+    };
+  }
+
+  return info;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function toChatTool(tool: vscode.LanguageModelChatTool): ChatTool {
@@ -191,6 +222,11 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
       const tools = toCodeBuddyTools(options.tools?.map(toChatTool));
       // A required tool mode only makes sense when tools were actually provided.
       const toolChoice = tools ? toCodeBuddyToolChoice(options.toolMode) : undefined;
+      // Thinking Effort from the model picker (proposed API). 'off' / missing
+      // means upstream default; otherwise map to CodeBuddy's reasoning_effort.
+      const rawEffort = options.modelConfiguration?.reasoningEffort;
+      const reasoningEffort =
+        typeof rawEffort === 'string' && rawEffort !== 'off' ? rawEffort : undefined;
 
       log(
         `  → codebuddy messages: ${convertedMessages
@@ -201,7 +237,10 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
           )
           .join(' | ')}`,
       );
-      log(`  → codebuddy tools: ${tools ? `${tools.length} tools` : 'none'} tool_choice: ${toolChoice ?? 'auto'}`);
+      log(
+        `  → codebuddy tools: ${tools ? `${tools.length} tools` : 'none'} tool_choice: ${toolChoice ?? 'auto'}` +
+          ` reasoning_effort: ${reasoningEffort ?? '(default)'}`,
+      );
 
       const controller = new AbortController();
       if (token.isCancellationRequested) {
@@ -220,6 +259,7 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
             messages: convertedMessages,
             tools,
             tool_choice: toolChoice,
+            reasoning_effort: reasoningEffort,
           },
           {
             onEvent: (payload) => {

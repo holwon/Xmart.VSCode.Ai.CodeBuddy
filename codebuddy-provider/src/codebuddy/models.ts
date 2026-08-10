@@ -23,7 +23,18 @@ export interface ModelInfo {
   /** DeepSeek-family models stream `delta.reasoning_content`. */
   supportsReasoning: boolean;
   detail?: string;
+  /**
+   * Reasoning-effort levels the model exposes in the VS Code model picker
+   * ("Thinking Effort" selector). `'off'` disables reasoning entirely.
+   * Defaults to none (no selector shown).
+   */
+  reasoningEffortLevels?: string[];
+  /** Default effort when the user has not picked one. */
+  defaultReasoningEffort?: string;
 }
+
+/** Canonical VS Code reasoning-effort levels this provider exposes. */
+export const REASONING_EFFORT_LEVELS = ['off', 'low', 'medium', 'high'] as const;
 
 export const CODEBUDDY_MODELS: ModelInfo[] = [
   {
@@ -35,6 +46,8 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxOutputTokens: 8192,
     toolCalling: true,
     supportsReasoning: true,
+    reasoningEffortLevels: ['off', 'low', 'medium', 'high'],
+    defaultReasoningEffort: 'medium',
     detail: 'DeepSeek V4 Pro (CodeBuddy cloud)',
   },
   {
@@ -46,6 +59,8 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     maxOutputTokens: 8192,
     toolCalling: true,
     supportsReasoning: true,
+    reasoningEffortLevels: ['off', 'low', 'medium', 'high'],
+    defaultReasoningEffort: 'medium',
     detail: 'DeepSeek V4 Flash (CodeBuddy cloud)',
   },
   {
