@@ -11,9 +11,11 @@ Register CodeBuddy (Tencent) models as a VS Code language model provider, usable
 
 ## Requirements
 
-- VS Code **1.98 or newer**
+- VS Code **1.125 or newer** (the `engines` field enforces this at install time; the model-configuration picker needs 1.126+)
 - GitHub Copilot Chat extension installed (the chat UI)
 - A CodeBuddy access token (created in the CodeBuddy console/backend)
+
+> Note: the extension declares the `chatProvider` API proposal for the model-configuration (Thinking Effort) picker. If the Thinking Effort selector does not appear in the model picker, relaunch VS Code with `--enable-proposed-api=local.codebuddy-provider`.
 
 ## Configuration
 

@@ -7,8 +7,11 @@
   "private": true,
   "license": "MIT",
   "engines": {
-    "vscode": "^1.125.0"
+    "vscode": ">=1.125.0"
   },
+  "enabledApiProposals": [
+    "chatProvider"
+  ],
   "categories": [
     "AI",
     "Other"
