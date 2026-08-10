@@ -21,6 +21,12 @@ import { CodeBuddyChatMessage, CodeBuddyToolDefinition } from './types';
 
 export const CODEBUDDY_ENDPOINT = 'https://copilot.tencent.com/v2/chat/completions';
 
+/** Socket inactivity timeout — a stream that stays silent this long is dead. */
+const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Upper bound for error bodies collected on non-200 responses. */
+const MAX_ERROR_BODY_BYTES = 1024 * 1024;
+
 export interface CodeBuddyStreamRequest {
   model: string;
   messages: CodeBuddyChatMessage[];
@@ -42,6 +48,9 @@ export interface CodeBuddyClientOptions {
 }
 
 export class CodeBuddyApiError extends Error {
+  /** Enumerable mirror of `message` for assertion/display convenience. */
+  readonly msg: string;
+
   constructor(
     readonly code: number,
     message: string,
@@ -49,6 +58,7 @@ export class CodeBuddyApiError extends Error {
   ) {
     super(message);
     this.name = 'CodeBuddyApiError';
+    this.msg = message;
   }
 }
 
@@ -104,8 +114,15 @@ export class CodeBuddyClient {
     signal?: AbortSignal,
   ): Promise<http.IncomingMessage> {
     return new Promise((resolve, reject) => {
-      const request = https.request(url, { method: 'POST', headers, signal }, (response) => {
-        resolve(response);
+      const request = https.request(
+        url,
+        { method: 'POST', headers, signal, timeout: REQUEST_TIMEOUT_MS },
+        (response) => {
+          resolve(response);
+        },
+      );
+      request.on('timeout', () => {
+        request.destroy(new CodeBuddyApiError(-1, 'CodeBuddy request timed out'));
       });
       request.on('error', reject);
       request.write(body);
@@ -120,6 +137,7 @@ export class CodeBuddyClient {
   ): Promise<void> {
     response.setEncoding('utf8');
     const parser = new SseParser();
+    let finished = false;
 
     for await (const chunk of response) {
       if (signal?.aborted) {
@@ -127,33 +145,56 @@ export class CodeBuddyClient {
         return;
       }
       for (const line of parser.push(chunk)) {
-        this.dispatchLine(line, callbacks);
+        if (this.dispatchLine(line, callbacks)) {
+          finished = true;
+          break;
+        }
+      }
+      if (finished) {
+        break;
       }
     }
-    for (const line of parser.flush()) {
-      this.dispatchLine(line, callbacks);
+    if (!finished) {
+      for (const line of parser.flush()) {
+        if (this.dispatchLine(line, callbacks)) {
+          finished = true;
+          break;
+        }
+      }
     }
 
     if (signal?.aborted) {
       return;
     }
+    // Exactly one onDone per stream, whether it ended via the [DONE] marker
+    // (dispatchLine returned true) or via the connection closing.
     callbacks.onDone();
   }
 
-  private dispatchLine(line: string, callbacks: CodeBuddyStreamCallbacks): void {
+  /**
+   * Handle one SSE line. Returns true when the line was the `[DONE]` marker.
+   * Throws `CodeBuddyApiError` when the payload is a CodeBuddy `{code, msg}`
+   * error envelope (some failures arrive inside an otherwise 200 stream).
+   */
+  private dispatchLine(line: string, callbacks: CodeBuddyStreamCallbacks): boolean {
     const payload = parseDataLine(line);
     if (payload === null) {
-      return;
+      return false;
     }
     if (payload === DONE_MARKER) {
-      callbacks.onDone();
-      return;
+      return true;
     }
     const parsed = tryParseJson(payload);
-    if (parsed !== undefined) {
-      callbacks.onEvent(parsed);
+    if (parsed === undefined) {
+      // Malformed JSON lines are skipped defensively; the stream may continue.
+      return false;
     }
-    // Malformed JSON lines are skipped defensively; the stream may still continue.
+    const cbError = detectCodeBuddyError(parsed);
+    if (cbError) {
+      throw new CodeBuddyApiError(cbError.code, cbError.msg);
+    }
+    callbacks.onEvent(parsed);
+    return false;
   }
 }
 
@@ -162,7 +203,9 @@ function collectBody(response: http.IncomingMessage): Promise<string> {
     let body = '';
     response.setEncoding('utf8');
     response.on('data', (chunk: string) => {
-      body += chunk;
+      if (body.length < MAX_ERROR_BODY_BYTES) {
+        body += chunk;
+      }
     });
     response.on('end', () => resolve(body));
     response.on('error', reject);

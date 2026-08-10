@@ -78,7 +78,7 @@ function toChatMessageParts(content: readonly unknown[]): ChatMessagePart[] {
     } else if (item instanceof vscode.LanguageModelToolCallPart) {
       parts.push({ kind: 'tool-call', callId: item.callId, name: item.name, input: item.input });
     } else if (item instanceof vscode.LanguageModelToolResultPart) {
-      parts.push({ kind: 'tool-result', callId: item.callId, content: item.content });
+      parts.push({ kind: 'tool-result', callId: item.callId, content: flattenToolResult(item.content) });
     } else {
       // Unknown part type: fall back to a best-effort textual representation.
       try {
@@ -89,6 +89,29 @@ function toChatMessageParts(content: readonly unknown[]): ChatMessagePart[] {
     }
   }
   return parts;
+}
+
+/**
+ * Tool results arrive as an array of parts (`LanguageModelTextPart`, strings,
+ * etc.). Flatten them into plain text so the upstream API receives clean
+ * content instead of a JSON-wrapped array.
+ */
+function flattenToolResult(content: readonly unknown[]): string {
+  return content
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item;
+      }
+      if (item instanceof vscode.LanguageModelTextPart) {
+        return item.value;
+      }
+      try {
+        return JSON.stringify(item);
+      } catch {
+        return String(item);
+      }
+    })
+    .join('\n');
 }
 
 function toChatRequestMessage(message: vscode.LanguageModelChatRequestMessage): ChatRequestMessage {
@@ -122,11 +145,16 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
       const chatMessages = messages.map(toChatRequestMessage);
       const convertedMessages = toCodeBuddyMessages(chatMessages);
       const tools = toCodeBuddyTools(options.tools?.map(toChatTool));
-      const toolChoice = toCodeBuddyToolChoice(options.toolMode);
+      // A required tool mode only makes sense when tools were actually provided.
+      const toolChoice = tools ? toCodeBuddyToolChoice(options.toolMode) : undefined;
 
       const controller = new AbortController();
+      if (token.isCancellationRequested) {
+        controller.abort();
+      }
       const cancellationSubscription = token.onCancellationRequested(() => controller.abort());
       const toolCalls = new ToolCallAccumulator();
+      let reported = false;
 
       try {
         await client.stream(
@@ -155,6 +183,12 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
               }
             },
             onDone: () => {
+              // Guard against double delivery (defensive; the client already
+              // guarantees exactly one onDone per stream).
+              if (reported) {
+                return;
+              }
+              reported = true;
               for (const call of toolCalls.toParts()) {
                 progress.report(new vscode.LanguageModelToolCallPart(call.callId, call.name, call.input));
               }
@@ -170,14 +204,35 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
         if (error instanceof CodeBuddyApiError) {
           throw mapErrorCode(error);
         }
-        throw error;
+        throw new vscode.LanguageModelError(
+          `CodeBuddy request failed: ${(error as Error).message ?? String(error)}`,
+        );
       } finally {
         cancellationSubscription.dispose();
       }
     },
 
     provideTokenCount: async (_model, text) => {
-      const raw = typeof text === 'string' ? text : text.content.map((part) => String(part)).join(' ');
+      if (typeof text === 'string') {
+        return estimateTokenCount(text);
+      }
+      const raw = text.content
+        .map((part) => {
+          if (typeof part === 'string') {
+            return part;
+          }
+          if (part instanceof vscode.LanguageModelTextPart) {
+            return part.value;
+          }
+          if (part instanceof vscode.LanguageModelToolCallPart) {
+            return `${part.name}(${JSON.stringify(part.input)})`;
+          }
+          if (part instanceof vscode.LanguageModelToolResultPart) {
+            return JSON.stringify(part.content);
+          }
+          return '';
+        })
+        .join(' ');
       return estimateTokenCount(raw);
     },
   };

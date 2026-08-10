@@ -132,7 +132,3 @@ export const CODEBUDDY_MODELS: ModelInfo[] = [
     supportsReasoning: true,
   },
 ];
-
-export function getModelById(id: string): ModelInfo | undefined {
-  return CODEBUDDY_MODELS.find((model) => model.id === id);
-}
