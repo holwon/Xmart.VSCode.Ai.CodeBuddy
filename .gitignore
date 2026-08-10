@@ -1,0 +1,14 @@
+﻿# Tool caches
+.codebase-memory/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+
+# VS Code extension packages
+*.vsix
