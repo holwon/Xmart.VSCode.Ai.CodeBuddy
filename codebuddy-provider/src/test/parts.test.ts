@@ -62,6 +62,11 @@ describe('flattenPartArray', () => {
   it('JSON-serialises other objects', () => {
     expect(flattenPartArray([{ a: 1 }])).toBe('{"a":1}');
   });
+
+  it('falls back to String for JSON-stringify-undefined values', () => {
+    // JSON.stringify(undefined) === undefined → falls back to 'undefined'.
+    expect(flattenPartArray([undefined])).toBe('undefined');
+  });
 });
 
 describe('renderPartForTokens', () => {

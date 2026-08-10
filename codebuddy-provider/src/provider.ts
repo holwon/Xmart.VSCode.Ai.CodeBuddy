@@ -23,6 +23,7 @@ import { mapCodeBuddyError } from './codebuddy/errors';
 import { toCodeBuddyMessages, toCodeBuddyTools, toCodeBuddyToolChoice } from './codebuddy/messages';
 import { CODEBUDDY_MODELS, ModelInfo } from './codebuddy/models';
 import { describeEmptyStream, isStreamEmpty } from './codebuddy/response-guard';
+import { dispatchPart, renderPartForTokens } from './codebuddy/parts';
 import { estimateTokenCount } from './codebuddy/token';
 import { ToolCallAccumulator } from './codebuddy/toolcalls';
 import { ChatMessagePart, ChatRequestMessage, ChatTool } from './codebuddy/types';
@@ -118,60 +119,12 @@ function toChatTool(tool: vscode.LanguageModelChatTool): ChatTool {
 function toChatMessageParts(content: readonly unknown[]): ChatMessagePart[] {
   const parts: ChatMessagePart[] = [];
   for (const item of content) {
-    if (typeof item === 'string') {
-      if (item !== '') {
-        parts.push({ kind: 'text', text: item });
-      }
-      continue;
-    }
-    if (item instanceof vscode.LanguageModelTextPart) {
-      parts.push({ kind: 'text', text: item.value });
-    } else if (item instanceof vscode.LanguageModelToolCallPart) {
-      parts.push({ kind: 'tool-call', callId: item.callId, name: item.name, input: item.input });
-    } else if (item instanceof vscode.LanguageModelToolResultPart) {
-      parts.push({ kind: 'tool-result', callId: item.callId, content: flattenToolResult(item.content) });
-    } else if (item && typeof item === 'object') {
-      // Duck-typing fallback: match on shape rather than class identity as a
-      // cross-version defensive measure (the vscode classes are not minified
-      // in the extension host, but relying on shape keeps this robust to API
-      // churn). Also handles parts with a `value` (e.g. thinking parts) by
-      // surfacing the text instead of JSON-serializing the whole object.
-      const obj = item as { callId?: unknown; name?: unknown; input?: unknown; content?: unknown; value?: unknown };
-      if (typeof obj.callId === 'string' && typeof obj.name === 'string') {
-        parts.push({ kind: 'tool-call', callId: obj.callId, name: obj.name, input: (obj.input as object) ?? {} });
-      } else if (typeof obj.callId === 'string' && Array.isArray(obj.content)) {
-        parts.push({ kind: 'tool-result', callId: obj.callId, content: flattenToolResult(obj.content) });
-      } else if (typeof obj.value === 'string') {
-        // Text-like part (e.g. thinking / reasoning content).
-        parts.push({ kind: 'text', text: obj.value });
-      }
-      // Unknown part type: skip it.
+    const dispatched = dispatchPart(item);
+    if (dispatched !== null) {
+      parts.push(dispatched);
     }
   }
   return parts;
-}
-
-/**
- * Tool results arrive as an array of parts (`LanguageModelTextPart`, strings,
- * etc.). Flatten them into plain text so the upstream API receives clean
- * content instead of a JSON-wrapped array.
- */
-function flattenToolResult(content: readonly unknown[]): string {
-  return content
-    .map((item) => {
-      if (typeof item === 'string') {
-        return item;
-      }
-      if (item instanceof vscode.LanguageModelTextPart) {
-        return item.value;
-      }
-      try {
-        return JSON.stringify(item);
-      } catch {
-        return String(item);
-      }
-    })
-    .join('\n');
 }
 
 function toChatRequestMessage(message: vscode.LanguageModelChatRequestMessage): ChatRequestMessage {
@@ -339,23 +292,7 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
       if (typeof text === 'string') {
         return estimateTokenCount(text);
       }
-      const raw = text.content
-        .map((part) => {
-          if (typeof part === 'string') {
-            return part;
-          }
-          if (part instanceof vscode.LanguageModelTextPart) {
-            return part.value;
-          }
-          if (part instanceof vscode.LanguageModelToolCallPart) {
-            return `${part.name}(${JSON.stringify(part.input)})`;
-          }
-          if (part instanceof vscode.LanguageModelToolResultPart) {
-            return JSON.stringify(part.content);
-          }
-          return '';
-        })
-        .join(' ');
+      const raw = text.content.map(renderPartForTokens).join(' ');
       return estimateTokenCount(raw);
     },
   };

@@ -85,7 +85,8 @@ export function flattenPartArray(content: readonly unknown[]): string {
         }
       }
       try {
-        return JSON.stringify(item);
+        const serialized = JSON.stringify(item);
+        return serialized ?? String(item);
       } catch {
         return String(item);
       }
