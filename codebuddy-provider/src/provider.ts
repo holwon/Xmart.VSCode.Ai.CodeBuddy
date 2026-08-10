@@ -19,8 +19,10 @@
 import * as vscode from 'vscode';
 import { CodeBuddyApiError, CodeBuddyClient } from './codebuddy/client';
 import { convertResponse } from './codebuddy/dto';
+import { mapCodeBuddyError } from './codebuddy/errors';
 import { toCodeBuddyMessages, toCodeBuddyTools, toCodeBuddyToolChoice } from './codebuddy/messages';
 import { CODEBUDDY_MODELS, ModelInfo } from './codebuddy/models';
+import { describeEmptyStream, isStreamEmpty } from './codebuddy/response-guard';
 import { estimateTokenCount } from './codebuddy/token';
 import { ToolCallAccumulator } from './codebuddy/toolcalls';
 import { ChatMessagePart, ChatRequestMessage, ChatTool } from './codebuddy/types';
@@ -179,16 +181,14 @@ function toChatRequestMessage(message: vscode.LanguageModelChatRequestMessage): 
 }
 
 function mapErrorCode(error: CodeBuddyApiError): vscode.LanguageModelError {
-  if (error.httpStatus === 401 || error.httpStatus === 403 || error.code === 11217) {
-    // 11217 = "login ing" — the token is invalid or expired.
-    return vscode.LanguageModelError.NoPermissions(
-      `CodeBuddy authentication failed (${error.message}). Check "codebuddy.accessToken".`,
-    );
+  const mapping = mapCodeBuddyError(error);
+  if (mapping.kind === 'no-permissions') {
+    return vscode.LanguageModelError.NoPermissions(mapping.message);
   }
-  if (error.httpStatus === 404) {
-    return vscode.LanguageModelError.NotFound(error.message);
+  if (mapping.kind === 'not-found') {
+    return vscode.LanguageModelError.NotFound(mapping.message);
   }
-  return new vscode.LanguageModelError(error.message);
+  return new vscode.LanguageModelError(mapping.message);
 }
 
 export function registerCodeBuddyProvider(): vscode.Disposable {
@@ -289,6 +289,21 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
               }
               reported = true;
               log(`  ← stream done: events=${eventCount} contentChars=${contentChars} toolCalls=${toolCalls.size}`);
+
+              // Empty-response guard: CodeBuddy occasionally ends a stream
+              // with no text and no tool calls. Completing silently makes VS
+              // Code surface a confusing "Response contained no choices"
+              // error; raise a meaningful one instead. Use the count of
+              // *complete* tool calls (toParts drops fragments without an id
+              // or name), so truncated tool-call fragments don't mask an
+              // otherwise empty stream.
+              const completeToolCalls = toolCalls.toParts().length;
+              if (isStreamEmpty({ eventCount, contentChars, toolCallCount: completeToolCalls })) {
+                throw new vscode.LanguageModelError(
+                  describeEmptyStream({ eventCount, contentChars, toolCallCount: completeToolCalls }),
+                );
+              }
+
               for (const call of toolCalls.toParts()) {
                 progress.report(new vscode.LanguageModelToolCallPart(call.callId, call.name, call.input));
               }
@@ -304,9 +319,12 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
         log(`  ← error: ${(error as Error).stack ?? String(error)}`);
         if (error instanceof CodeBuddyApiError) {
           log(`    code=${error.code} httpStatus=${error.httpStatus} msg=${error.msg.slice(0, 500)}`);
-        }
-        if (error instanceof CodeBuddyApiError) {
           throw mapErrorCode(error);
+        }
+        // LanguageModelError (e.g. from the empty-response guard) passes
+        // through untouched so the user sees its message.
+        if (error instanceof vscode.LanguageModelError) {
+          throw error;
         }
         throw new vscode.LanguageModelError(
           `CodeBuddy request failed: ${(error as Error).message ?? String(error)}`,

@@ -123,6 +123,19 @@ describe('CodeBuddyClient.stream', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('rejects the stream when onDone throws (empty-response guard contract)', async () => {
+    stageStream('data: [DONE]\n');
+    const client = createClient();
+    const boom = new Error('empty response');
+
+    await expect(
+      client.stream(
+        { model: 'deepseek-v4-pro', messages: [{ role: 'user', content: 'x' }] },
+        { onEvent: () => undefined, onDone: () => { throw boom; } },
+      ),
+    ).rejects.toBe(boom);
+  });
+
   it('calls onDone exactly once when the connection closes without [DONE]', async () => {
     stageStream('data: {"choices":[{"delta":{"content":"hi"}}]}\n');
     const client = createClient();
