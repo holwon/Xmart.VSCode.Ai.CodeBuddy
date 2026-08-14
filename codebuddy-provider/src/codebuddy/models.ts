@@ -29,6 +29,10 @@ export interface ModelInfo {
   reasoningEffortLevels?: string[];
   /** Default effort when the user has not picked one. */
   defaultReasoningEffort?: string;
+  /** Remote catalog declares image input support; surfaced as capabilities.imageInput. */
+  supportsImages?: boolean;
+  /** Where this model entry originated: remote / local / hardcoded. */
+  provenance?: 'remote' | 'local' | 'hardcoded';
 }
 
 export const CODEBUDDY_MODELS: ModelInfo[] = [

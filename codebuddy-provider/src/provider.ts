@@ -21,8 +21,10 @@ import { CodeBuddyApiError, CodeBuddyClient } from './codebuddy/client';
 import { convertResponse } from './codebuddy/dto';
 import { mapCodeBuddyError } from './codebuddy/errors';
 import { toCodeBuddyMessages, toCodeBuddyTools, toCodeBuddyToolChoice } from './codebuddy/messages';
-import { CODEBUDDY_MODELS, ModelInfo } from './codebuddy/models';
-import { describeEmptyStream, isStreamEmpty } from './codebuddy/response-guard';
+import { ModelInfo } from './codebuddy/models';
+import { fetchModelCatalog } from './codebuddy/model-catalog';
+import { readLocalModelsConfig } from './codebuddy/local-models';
+import { ModelRegistry } from './codebuddy/model-registry';import { describeEmptyStream, isStreamEmpty } from './codebuddy/response-guard';
 import { dispatchPart, renderPartForTokens } from './codebuddy/parts';
 import { estimateTokenCount } from './codebuddy/token';
 import { ToolCallAccumulator } from './codebuddy/toolcalls';
@@ -82,6 +84,8 @@ function toModelInformation(model: ModelInfo): vscode.LanguageModelChatInformati
     tooltip: model.detail,
     capabilities: {
       toolCalling: model.toolCalling,
+      // VS Code 1.98+ surfaces image input; absent → undefined (no capability).
+      imageInput: model.supportsImages === true ? true : undefined,
     },
   };
 
@@ -115,6 +119,39 @@ function toModelInformation(model: ModelInfo): vscode.LanguageModelChatInformati
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Build the real (non-test) ModelRegistry dependencies from VS Code
+ * configuration. Reads the access token and the models-cache TTL lazily per
+ * refresh, mirroring createClient's per-request config read.
+ */
+export function createDefaultRegistryDeps(): ConstructorParameters<typeof ModelRegistry>[0]['deps'] {
+  const config = vscode.workspace.getConfiguration('codebuddy');
+  const ttlSeconds = Math.max(30, config.get<number>('modelsCacheTtlSeconds', 1800));
+  const readToken = () => {
+    const token = config.get<string>('accessToken', '') || process.env[CODEBUDDY_TOKEN_ENV_VAR] || '';
+    return {
+      accessToken: token,
+      userId: config.get<string>('userId', '') || undefined,
+    };
+  };
+
+  return {
+    ttlMs: ttlSeconds * 1000,
+    async fetchCatalog() {
+      const { accessToken, userId } = readToken();
+      if (!accessToken) {
+        throw vscode.LanguageModelError.NoPermissions(
+          'CodeBuddy access token is not configured. Set "codebuddy.accessToken" in your settings, ' +
+            `or the "${CODEBUDDY_TOKEN_ENV_VAR}" environment variable.`,
+        );
+      }
+      const result = await fetchModelCatalog({ accessToken, userId });
+      return result.models;
+    },
+    readLocal: readLocalModelsConfig,
+  };
 }
 
 function toChatTool(tool: vscode.LanguageModelChatTool): ChatTool {
@@ -154,10 +191,20 @@ function mapErrorCode(error: CodeBuddyApiError): vscode.LanguageModelError {
   return new vscode.LanguageModelError(mapping.message);
 }
 
-export function registerCodeBuddyProvider(): vscode.Disposable {
+export function registerCodeBuddyProvider(
+  registry: ModelRegistry = new ModelRegistry({ deps: createDefaultRegistryDeps() }),
+): vscode.Disposable {
+  // Notify VS Code to re-query model information when the registry content
+  // changes (stable API optional event — research/01 §2).
+  const changeEvent = new vscode.EventEmitter<void>();
+  const unsubscribe = registry.onDidChange(() => changeEvent.fire());
+
   const provider: vscode.LanguageModelChatProvider = {
+    onDidChangeLanguageModelChatInformation: changeEvent.event,
+
     provideLanguageModelChatInformation: async () => {
-      return CODEBUDDY_MODELS.map(toModelInformation);
+      await registry.refresh();
+      return registry.getAll().map(toModelInformation);
     },
 
     provideLanguageModelChatResponse: async (model, messages, options, progress, token) => {
@@ -306,5 +353,12 @@ export function registerCodeBuddyProvider(): vscode.Disposable {
     },
   };
 
-  return vscode.lm.registerLanguageModelChatProvider(VENDOR, provider);
+  const registration = vscode.lm.registerLanguageModelChatProvider(VENDOR, provider);
+  return {
+    dispose() {
+      unsubscribe();
+      changeEvent.dispose();
+      registration.dispose();
+    },
+  };
 }

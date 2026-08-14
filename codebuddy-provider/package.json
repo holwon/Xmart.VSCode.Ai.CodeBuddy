@@ -3,9 +3,14 @@
   "displayName": "CodeBuddy Model Provider",
   "description": "Register CodeBuddy (Tencent) models as a VS Code language model provider, usable inside Copilot Chat / Agent.",
   "version": "0.0.1",
-  "publisher": "local",
+  "publisher": "Lonze",
   "private": true,
   "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ilonze/Xmart.VSCode.AiModels.CodeBuddy.git"
+  },
   "engines": {
     "vscode": ">=1.125.0"
   },
@@ -40,9 +45,22 @@
           "type": "string",
           "default": "",
           "markdownDescription": "CodeBuddy account uid, sent as `X-User-Id`. When empty, the request falls back to `X-No-User-Id: 1`."
+        },
+        "codebuddy.modelsCacheTtlSeconds": {
+          "type": "number",
+          "default": 1800,
+          "minimum": 30,
+          "markdownDescription": "How long (in seconds) to keep the fetched model list before refreshing it automatically. Minimum 30. Use the `CodeBuddy: Refresh Models` command to refresh immediately."
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "codebuddy.refreshModels",
+        "title": "Refresh Models",
+        "category": "CodeBuddy"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
