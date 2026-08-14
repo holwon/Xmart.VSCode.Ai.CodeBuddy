@@ -1,13 +1,13 @@
 # CodeBuddy Model Provider
 
-Register CodeBuddy (Tencent) models as a VS Code language model provider, usable directly inside **Copilot Chat / Agent** — keeping the Copilot UI while driving CodeBuddy's cloud models.
+Register CodeBuddy models as a VS Code language model provider, usable directly inside **Copilot Chat / Agent** — keeping the Copilot UI while driving CodeBuddy's cloud models.
 
 ## Features
 
 - Registers CodeBuddy models in the Copilot model picker (Manage Models / chat input)
 - Supports **agent mode** (tool calling) for models that support it
 - Streaming responses, conversation context managed by VS Code
-- No external proxy process needed — this extension replaces the standalone `腾讯CodeBuddy-proxy.js` HTTP proxy
+- No external proxy process needed — this extension replaces the standalone external HTTP proxy
 
 ## Requirements
 
@@ -49,7 +49,7 @@ CodeBuddy does not offer public API keys; the access token comes from a CodeBudd
 
 1. Install the extension (and reload VS Code).
 2. Open **Copilot Chat**.
-3. Pick a model from the **CodeBuddy (Tencent)** group in the model picker (e.g. DeepSeek V4 Pro).
+3. Pick a model from the **CodeBuddy (鹅厂)** group in the model picker (e.g. DeepSeek V4 Pro).
 4. Chat. Agent mode is available for models with tool calling enabled.
 
 ## Available models
