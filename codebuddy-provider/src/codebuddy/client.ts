@@ -38,6 +38,13 @@ export interface CodeBuddyStreamRequest {
    * honor `'high'` — see research/02).
    */
   reasoning_effort?: string;
+  /**
+   * OpenAI-compatible stream options. The provider always requests usage
+   * (`include_usage: true`) so the response carries a usage chunk (BYOK
+   * alignment — see research/02 and spec-usage-feedback). Harmless if the
+   * upstream ignores it.
+   */
+  stream_options?: { include_usage?: boolean };
 }
 
 export interface CodeBuddyStreamCallbacks {
@@ -82,7 +89,13 @@ export class CodeBuddyClient {
     signal?: AbortSignal,
   ): Promise<void> {
     const endpoint = new URL(this.options.endpoint ?? CODEBUDDY_ENDPOINT);
-    const body = JSON.stringify({ ...request, stream: true });
+    // Always request usage so the response includes a usage chunk; a caller may
+    // opt out via stream_options.include_usage: false.
+    const body = JSON.stringify({
+      ...request,
+      stream: true,
+      stream_options: { include_usage: true, ...request.stream_options },
+    });
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

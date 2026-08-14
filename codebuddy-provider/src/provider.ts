@@ -24,13 +24,20 @@ import { toCodeBuddyMessages, toCodeBuddyTools, toCodeBuddyToolChoice } from './
 import { ModelInfo } from './codebuddy/models';
 import { fetchModelCatalog } from './codebuddy/model-catalog';
 import { readLocalModelsConfig } from './codebuddy/local-models';
-import { ModelRegistry } from './codebuddy/model-registry';import { describeEmptyStream, isStreamEmpty } from './codebuddy/response-guard';
+import { ModelRegistry } from './codebuddy/model-registry';
+import { describeEmptyStream, isStreamEmpty } from './codebuddy/response-guard';
 import { dispatchPart, renderPartForTokens } from './codebuddy/parts';
-import { estimateTokenCount } from './codebuddy/token';
+import { estimateTokenCount, memoizeTokenCount } from './codebuddy/token';
 import { ToolCallAccumulator } from './codebuddy/toolcalls';
 import { ChatMessagePart, ChatRequestMessage, ChatTool } from './codebuddy/types';
+import { aggregateRequestUsage } from './codebuddy/usage';
+import { SessionLedger } from './codebuddy/session-ledger';
 
 const VENDOR = 'codebuddy';
+
+// Memoized token estimator shared across provideTokenCount calls so repeated
+// text (tool schemas, common system content) is computed only once.
+const memoizedEstimateTokenCount = memoizeTokenCount(estimateTokenCount);
 
 /**
  * Environment-variable fallback for the access token, matching the CodeBuddy
@@ -198,6 +205,9 @@ export function registerCodeBuddyProvider(
   // changes (stable API optional event — research/01 §2).
   const changeEvent = new vscode.EventEmitter<void>();
   const unsubscribe = registry.onDidChange(() => changeEvent.fire());
+  // Session Ledger lives at provider scope so Token Usage accumulates across
+  // requests (CONTEXT.md: "跨请求累计 token 记账").
+  const ledger = new SessionLedger();
 
   const provider: vscode.LanguageModelChatProvider = {
     onDidChangeLanguageModelChatInformation: changeEvent.event,
@@ -258,6 +268,9 @@ export function registerCodeBuddyProvider(
       }
       const cancellationSubscription = token.onCancellationRequested(() => controller.abort());
       const toolCalls = new ToolCallAccumulator();
+      // Collect this request's usage chunks, then record once at the end
+      // (avoids double-counting when CodeBuddy repeats usage on several chunks).
+      const requestUsageChunks: unknown[] = [];
       let reported = false;
       let eventCount = 0;
       let contentChars = 0;
@@ -276,7 +289,14 @@ export function registerCodeBuddyProvider(
               eventCount += 1;
               const converted = convertResponse(payload) as {
                 choices?: { delta?: Record<string, unknown> }[];
+                usage?: unknown;
               };
+              // Capture the real Token Usage from the response (CodeBuddy may
+              // send it on one of the stream chunks; collect for end-of-request
+              // aggregation so repeated chunks count once).
+              if (converted.usage !== undefined) {
+                requestUsageChunks.push(converted.usage);
+              }
               const delta = converted.choices?.[0]?.delta;
               if (!delta) {
                 return;
@@ -299,6 +319,13 @@ export function registerCodeBuddyProvider(
               }
               reported = true;
               log(`  ← stream done: events=${eventCount} contentChars=${contentChars} toolCalls=${toolCalls.size}`);
+              // Record this request's usage once (dedup across repeated chunks).
+              ledger.record(aggregateRequestUsage(requestUsageChunks));
+              const usage = ledger.summary();
+              log(
+                `  ← token usage: input=${usage.input} output=${usage.output}` +
+                  ` cached=${usage.cached} reasoning=${usage.reasoning} requests=${usage.requests}`,
+              );
 
               // Empty-response guard: CodeBuddy occasionally ends a stream
               // with no text and no tool calls. Completing silently makes VS
@@ -345,11 +372,13 @@ export function registerCodeBuddyProvider(
     },
 
     provideTokenCount: async (_model, text) => {
+      // Memoized estimation: tool schemas and repeated content are estimated
+      // repeatedly by VS Code, so caching identical text avoids recomputation.
       if (typeof text === 'string') {
-        return estimateTokenCount(text);
+        return memoizedEstimateTokenCount(text);
       }
       const raw = text.content.map(renderPartForTokens).join(' ');
-      return estimateTokenCount(raw);
+      return memoizedEstimateTokenCount(raw);
     },
   };
 

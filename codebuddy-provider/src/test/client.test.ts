@@ -219,4 +219,38 @@ describe('CodeBuddyClient.stream', () => {
     const body = request.write.mock.calls[0][0] as string;
     expect(JSON.parse(body).stream).toBe(true);
   });
+
+  it('requests usage by default via stream_options.include_usage', async () => {
+    stageStream('data: [DONE]\n');
+    const client = createClient();
+
+    await client.stream(
+      { model: 'deepseek-v4-pro', messages: [{ role: 'user', content: 'x' }] },
+      { onEvent: () => undefined, onDone: () => undefined },
+    );
+
+    const mock = https.request as ReturnType<typeof vi.fn>;
+    const request = mock.mock.results[0].value as { write: ReturnType<typeof vi.fn> };
+    const body = request.write.mock.calls[0][0] as string;
+    expect(JSON.parse(body).stream_options).toEqual({ include_usage: true });
+  });
+
+  it('lets a caller opt out of usage via stream_options.include_usage: false', async () => {
+    stageStream('data: [DONE]\n');
+    const client = createClient();
+
+    await client.stream(
+      {
+        model: 'deepseek-v4-pro',
+        messages: [{ role: 'user', content: 'x' }],
+        stream_options: { include_usage: false },
+      },
+      { onEvent: () => undefined, onDone: () => undefined },
+    );
+
+    const mock = https.request as ReturnType<typeof vi.fn>;
+    const request = mock.mock.results[0].value as { write: ReturnType<typeof vi.fn> };
+    const body = request.write.mock.calls[0][0] as string;
+    expect(JSON.parse(body).stream_options).toEqual({ include_usage: false });
+  });
 });
