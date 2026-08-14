@@ -4,10 +4,10 @@
 
 **Blocked by:** 20(Token Usage 解析模块)、21(Session Ledger 会话账本)、23(请求侧 include_usage 接线)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] 流处理回调捕获顶层 usage 并解析
-- [ ] 解析结果写入 Session Ledger
-- [ ] 输出面板记录每次请求的 usage 明细
-- [ ] 字段缺失时不报错,会话继续正常
-- [ ] 全量测试无回归;F5 手动验证输出面板日志
+- [x] 流处理回调捕获顶层 usage 并解析
+- [x] 解析结果写入 Session Ledger
+- [x] 输出面板记录每次请求的 usage 明细
+- [x] 字段缺失时不报错,会话继续正常
+- [x] 全量测试无回归;F5 手动验证输出面板日志

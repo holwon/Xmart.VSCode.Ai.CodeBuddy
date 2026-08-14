@@ -4,9 +4,9 @@
 
 **Blocked by:** 20(Token Usage 解析模块)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] record() 正确累计单次 Token Usage
-- [ ] summary() 返回跨请求累计汇总(input/output/cached/reasoning 总量)
-- [ ] 空 ledger 的摘要正确(全零)
-- [ ] 纯逻辑零 vscode 依赖,单测通过
+- [x] record() 正确累计单次 Token Usage
+- [x] summary() 返回跨请求累计汇总(input/output/cached/reasoning 总量)
+- [x] 空 ledger 的摘要正确(全零)
+- [x] 纯逻辑零 vscode 依赖,单测通过

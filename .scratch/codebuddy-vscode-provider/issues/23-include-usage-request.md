@@ -4,8 +4,8 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] 请求类型含 stream_options,发送 include_usage: true
-- [ ] 网络层单测确认请求体包含该字段(沿用现有网络 mock 范例)
-- [ ] 不改变既有请求行为(stream: true 等)
+- [x] 请求类型含 stream_options,发送 include_usage: true
+- [x] 网络层单测确认请求体包含该字段(沿用现有网络 mock 范例)
+- [x] 不改变既有请求行为(stream: true 等)

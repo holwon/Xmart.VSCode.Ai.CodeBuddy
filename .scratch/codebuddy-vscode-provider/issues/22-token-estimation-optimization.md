@@ -4,9 +4,9 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] JSON/代码块等结构化文本的 token 权重更合理
-- [ ] 记忆化缓存:相同文本只计算一次,缓存后结果一致
-- [ ] CJK/非 CJK 基础估算行为不回归
-- [ ] 纯函数单测通过
+- [x] JSON/代码块等结构化文本的 token 权重更合理
+- [x] 记忆化缓存:相同文本只计算一次,缓存后结果一致
+- [x] CJK/非 CJK 基础估算行为不回归
+- [x] 纯函数单测通过

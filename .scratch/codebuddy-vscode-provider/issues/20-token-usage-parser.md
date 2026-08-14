@@ -4,9 +4,9 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] 兼容双字段命名,正确映射为规范化结构
-- [ ] cached/reasoning 细分字段正确解析
-- [ ] 字段缺失/畸形/非对象输入安全降级为零
-- [ ] 纯逻辑零 vscode 依赖,单测通过(沿用现有纯逻辑单测范例)
+- [x] 兼容双字段命名,正确映射为规范化结构
+- [x] cached/reasoning 细分字段正确解析
+- [x] 字段缺失/畸形/非对象输入安全降级为零
+- [x] 纯逻辑零 vscode 依赖,单测通过(沿用现有纯逻辑单测范例)
