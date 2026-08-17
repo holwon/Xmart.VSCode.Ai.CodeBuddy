@@ -12,3 +12,6 @@ dist/
 
 # VS Code extension packages
 *.vsix
+
+# VS Code test
+.vscode-test/
