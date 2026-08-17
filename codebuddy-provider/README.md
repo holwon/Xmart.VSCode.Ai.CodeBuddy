@@ -7,6 +7,7 @@ Register CodeBuddy models as a VS Code language model provider, usable directly 
 - Registers CodeBuddy models in the Copilot model picker (Manage Models / chat input)
 - Supports **agent mode** (tool calling) for models that support it
 - Streaming responses, conversation context managed by VS Code
+- **Thinking / reasoning** process from reasoning models (DeepSeek V4) is streamed and rendered separately from the final answer
 - No external proxy process needed — this extension replaces the standalone external HTTP proxy
 
 ## Requirements
@@ -15,7 +16,7 @@ Register CodeBuddy models as a VS Code language model provider, usable directly 
 - GitHub Copilot Chat extension installed (the chat UI)
 - A CodeBuddy access token (created in the CodeBuddy console/backend)
 
-> Note: the extension declares the `chatProvider` API proposal for the model-configuration (Thinking Effort) picker. If the Thinking Effort selector does not appear in the model picker, relaunch VS Code with `--enable-proposed-api=local.codebuddy-provider`.
+> Note: the extension declares the `chatProvider` API proposal for the model-configuration (Thinking Effort) picker **and** for rendering the reasoning process (`LanguageModelThinkingPart`). If the Thinking Effort selector does not appear (or reasoning is shown as plain text instead of a separate block), relaunch VS Code with `--enable-proposed-api=local.codebuddy-provider`.
 
 ## Configuration
 

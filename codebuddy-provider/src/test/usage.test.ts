@@ -1,6 +1,6 @@
 // Path: codebuddy-provider/src/test/usage.test.ts
 import { describe, expect, it } from 'vitest';
-import { aggregateRequestUsage, parseCodeBuddyUsage, TokenUsage } from '../codebuddy/usage';
+import { aggregateRequestUsage, parseCodeBuddyUsage, toApiUsage, TokenUsage } from '../codebuddy/usage';
 
 describe('parseCodeBuddyUsage', () => {
   it('parses OpenAI-style field names', () => {
@@ -115,5 +115,25 @@ describe('aggregateRequestUsage', () => {
       'garbage' as unknown,
     ]);
     expect(usage).toEqual<TokenUsage>({ input: 0, output: 0, cached: 0, reasoning: 0 });
+  });
+});
+
+describe('toApiUsage', () => {
+  it('maps a TokenUsage to the OpenAI-compatible ApiUsage shape', () => {
+    const api = toApiUsage({ input: 200, output: 50, cached: 60, reasoning: 12 });
+    expect(api).toEqual({
+      prompt_tokens: 200,
+      completion_tokens: 50,
+      total_tokens: 250,
+      prompt_tokens_details: { cached_tokens: 60 },
+      completion_tokens_details: { reasoning_tokens: 12 },
+    });
+  });
+
+  it('always sets total_tokens so Copilot isApiUsage passes', () => {
+    const api = toApiUsage({ input: 0, output: 0, cached: 0, reasoning: 0 });
+    expect(api.total_tokens).toBe(0);
+    expect(typeof api.prompt_tokens).toBe('number');
+    expect(typeof api.completion_tokens).toBe('number');
   });
 });

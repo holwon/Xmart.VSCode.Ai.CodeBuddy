@@ -11,9 +11,9 @@
  *   decide (or force via `toolMode`).
  * - Tool calls are accumulated across stream chunks and reported once the
  *   stream ends (VS Code only acts on them after the response completes).
- * - `delta.reasoning_content` (DeepSeek thinking) cannot be expressed as a
- *   part in the stable API, so it is dropped. Revisit if the `chatProvider`
- *   proposal with `LanguageModelThinkingPart` is adopted.
+ * - `delta.reasoning_content` (DeepSeek thinking) is reported as a
+ *   `LanguageModelThinkingPart` (proposed `chatProvider` API) so Copilot
+ *   renders the reasoning process separately from the final text.
  */
 
 import * as vscode from 'vscode';
@@ -30,10 +30,46 @@ import { dispatchPart, renderPartForTokens } from './codebuddy/parts';
 import { estimateTokenCount, memoizeTokenCount } from './codebuddy/token';
 import { ToolCallAccumulator } from './codebuddy/toolcalls';
 import { ChatMessagePart, ChatRequestMessage, ChatTool } from './codebuddy/types';
-import { aggregateRequestUsage } from './codebuddy/usage';
+import { aggregateRequestUsage, toApiUsage } from './codebuddy/usage';
 import { SessionLedger } from './codebuddy/session-ledger';
 
 const VENDOR = 'codebuddy';
+
+/**
+ * MimeType Copilot Chat uses to consume a `LanguageModelDataPart` carrying real
+ * token usage (see `CustomDataPartMimeTypes.Usage` in the Copilot extension).
+ * Reporting a usage part with this mimeType is what makes the Session Info /
+ * Context Window widget in the bottom-right of Copilot Chat show real numbers.
+ */
+const USAGE_MIME_TYPE = 'usage';
+
+/**
+ * True when the `chatProvider` proposed API is available at runtime. The
+ * extension declares `enabledApiProposals: ["chatProvider"]`, but VS Code
+ * only exposes proposed APIs when launched with
+ * `--enable-proposed-api=local.codebuddy-provider`. Guard every use so the
+ * provider degrades gracefully (thinking rendered as plain text) instead of
+ * crashing when the proposal is absent.
+ */
+const thinkingPartSupported =
+  typeof (vscode as { LanguageModelThinkingPart?: unknown }).LanguageModelThinkingPart === 'function';
+
+/**
+ * Report a reasoning_content chunk to the progress channel. When the proposed
+ * `LanguageModelThinkingPart` is available it is emitted as-is (Copilot
+ * renders it separately); otherwise it falls back to a `LanguageModelTextPart`
+ * so the reasoning text is still surfaced.
+ */
+function reportReasoningChunk(
+  progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+  text: string,
+): void {
+  if (thinkingPartSupported) {
+    progress.report(new vscode.LanguageModelThinkingPart(text) as vscode.LanguageModelResponsePart);
+  } else {
+    progress.report(new vscode.LanguageModelTextPart(text));
+  }
+}
 
 // Memoized token estimator shared across provideTokenCount calls so repeated
 // text (tool schemas, common system content) is computed only once.
@@ -301,6 +337,13 @@ export function registerCodeBuddyProvider(
               if (!delta) {
                 return;
               }
+              // reasoning_content: DeepSeek thinking stream (proposed API).
+              // Report it as a LanguageModelThinkingPart so Copilot renders it
+              // separately from the final text; fall back to a text part when
+              // the proposal is unavailable at runtime.
+              if (typeof delta.reasoning_content === 'string' && delta.reasoning_content !== '') {
+                reportReasoningChunk(progress, delta.reasoning_content);
+              }
               if (typeof delta.content === 'string' && delta.content !== '') {
                 contentChars += delta.content.length;
                 progress.report(new vscode.LanguageModelTextPart(delta.content));
@@ -320,12 +363,27 @@ export function registerCodeBuddyProvider(
               reported = true;
               log(`  ← stream done: events=${eventCount} contentChars=${contentChars} toolCalls=${toolCalls.size}`);
               // Record this request's usage once (dedup across repeated chunks).
-              ledger.record(aggregateRequestUsage(requestUsageChunks));
+              const requestUsage = aggregateRequestUsage(requestUsageChunks);
+              ledger.record(requestUsage);
               const usage = ledger.summary();
               log(
                 `  ← token usage: input=${usage.input} output=${usage.output}` +
                   ` cached=${usage.cached} reasoning=${usage.reasoning} requests=${usage.requests}`,
               );
+
+              // Report the real Token Usage back to Copilot so the Session Info
+              // / Context Window widget shows actual consumption. Copilot's chat
+              // endpoint consumes a `LanguageModelDataPart` whose mimeType is
+              // `usage` (stable API), parses it as OpenAI-compatible usage and
+              // feeds `IChatUsage` into the widget. Skip when no usage arrived.
+              if (requestUsage.input > 0 || requestUsage.output > 0) {
+                progress.report(
+                  new vscode.LanguageModelDataPart(
+                    new TextEncoder().encode(JSON.stringify(toApiUsage(requestUsage))),
+                    USAGE_MIME_TYPE,
+                  ),
+                );
+              }
 
               // Empty-response guard: CodeBuddy occasionally ends a stream
               // with no text and no tool calls. Completing silently makes VS

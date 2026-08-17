@@ -13,9 +13,8 @@
  * - `delta.function_call`, `delta.refusal`, `delta.extra_fields`,
  *   `choice.logprobs: null`, `usage: null` are empty noise → drop
  * - `delta.reasoning_content` is a DeepSeek extension (thinking). It is
- *   passed through in the converted DTO for completeness, but the provider
- *   never consumes it — the stable VS Code provider API has no thinking part,
- *   so it is dropped at the provider layer (see `provider.ts`).
+ *   passed through in the converted DTO and reported by the provider as a
+ *   `LanguageModelThinkingPart` (see `provider.ts`).
  */
 
 const VALID_FINISH_REASONS = new Set<string | null>(['stop', 'tool_calls', 'length', 'content_filter', null]);
@@ -43,9 +42,8 @@ export function convertDelta(cbDelta: Record<string, unknown> | undefined): Reco
     result.tool_calls = cbDelta.tool_calls;
   }
 
-  // reasoning_content: DeepSeek thinking stream. Passed through here for DTO
-  // completeness; the provider does not consume it (stable API has no thinking
-  // part).
+  // reasoning_content: DeepSeek thinking stream. Passed through and reported
+  // by the provider as a LanguageModelThinkingPart (proposed API).
   if (cbDelta.reasoning_content !== undefined && cbDelta.reasoning_content !== null) {
     result.reasoning_content = cbDelta.reasoning_content;
   }

@@ -41,4 +41,22 @@ declare module 'vscode' {
      */
     readonly modelConfiguration?: { readonly [key: string]: any };
   }
+
+  /**
+   * A language model response part containing extended reasoning content
+   * (e.g. DeepSeek thinking process). Rendered separately from text in the
+   * Copilot UI when supported. (proposed API)
+   */
+  class LanguageModelThinkingPart {
+    /**
+     * The reasoning content text.
+     */
+    readonly value: string;
+
+    /**
+     * Construct a thinking part with the given reasoning content.
+     * @param value The reasoning content text.
+     */
+    constructor(value: string);
+  }
 }

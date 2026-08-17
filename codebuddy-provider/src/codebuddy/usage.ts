@@ -68,6 +68,50 @@ function toNonNegativeNumber(...candidates: unknown[]): number {
 }
 
 /**
+ * The OpenAI-compatible usage shape Copilot consumes from a
+ * `LanguageModelDataPart` whose mimeType is the `usage` custom part (see
+ * `CustomDataPartMimeTypes.Usage` in the Copilot extension). Copilot's
+ * `isApiUsage` guard requires `prompt_tokens`/`completion_tokens`/`total_tokens`
+ * to be numbers; `total_tokens` drives the Session Info / Context Window widget
+ * (`usedTokens = prompt + completion`, denominator = model maxInput+maxOutput).
+ */
+export interface ApiUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  prompt_tokens_details?: { cached_tokens: number };
+  completion_tokens_details?: { reasoning_tokens: number };
+}
+
+/**
+ * Convert a normalized `TokenUsage` into the OpenAI-compatible `ApiUsage`
+ * shape so the provider can report real token consumption back to Copilot.
+ */
+export function toApiUsage(usage: TokenUsage): ApiUsage {
+  return {
+    prompt_tokens: usage.input,
+    completion_tokens: usage.output,
+    total_tokens: usage.input + usage.output,
+    prompt_tokens_details: { cached_tokens: usage.cached },
+    completion_tokens_details: { reasoning_tokens: usage.reasoning },
+  };
+}
+
+/**
+ * Format a `TokenUsage` into a single-line, human-readable string for the
+ * provider's output channel.
+ *
+ * Example:
+ *   `input 1280 · output 96 · cached 1100 · reasoning 40`
+ */
+export function formatTokenUsage(usage: TokenUsage): string {
+  return (
+    `input ${usage.input} · output ${usage.output}` +
+    ` · cached ${usage.cached} · reasoning ${usage.reasoning}`
+  );
+}
+
+/**
  * Aggregate one request's usage into a single `TokenUsage`.
  *
  * A single request may carry usage on more than one stream chunk (e.g. a
