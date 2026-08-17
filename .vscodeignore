@@ -1,12 +1,29 @@
-# Files to exclude from the .vsix package
-.vscode/**
+# ─── Source & dev artifacts (never ship) ───
 src/**
 test/**
 scripts/**
+.vscode/**
+.github/**
+.scratch/**
+.codebase-memory/**
 node_modules/**
+docs/**
+
+# ─── Build & tooling config ───
+tsconfig.json
+package-lock.json
 .gitignore
+.vscodeignore
+*.log
+
+# ─── Repo-level docs (keep only root README.md in the package) ───
+AGENTS.md
+CONTEXT.md
+
+# ─── Source maps & TypeScript ───
 **/*.ts
 **/*.map
-package-lock.json
-tsconfig.json
-*.log
+
+# ─── Local scratch / misc ───
+*.vsix
+.DS_Store
