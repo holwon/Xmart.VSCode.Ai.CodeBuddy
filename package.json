@@ -2,7 +2,7 @@
   "name": "codebuddy-provider",
   "displayName": "CodeBuddy Model Provider",
   "description": "Register CodeBuddy models as a VS Code language model provider, usable inside Copilot Chat / Agent.",
-  "version": "0.0.1",
+  "version": "0.0",
   "publisher": "Lonze",
   "private": true,
   "license": "MIT",
