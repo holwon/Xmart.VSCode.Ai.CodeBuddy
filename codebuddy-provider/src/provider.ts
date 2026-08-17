@@ -57,18 +57,27 @@ const thinkingPartSupported =
 /**
  * Report a reasoning_content chunk to the progress channel. When the proposed
  * `LanguageModelThinkingPart` is available it is emitted as-is (Copilot
- * renders it separately); otherwise it falls back to a `LanguageModelTextPart`
- * so the reasoning text is still surfaced.
+ * renders it separately); otherwise it is dropped (NOT degraded to a
+ * LanguageModelTextPart) so the reasoning text is never persisted into the
+ * conversation history as assistant content — degrading to a TextPart would
+ * inflate subsequent input tokens on every later turn.
+ *
+ * `enabled` is read from the `codebuddy.enableReasoning` setting; when false
+ * the chunk is ignored entirely.
  */
 function reportReasoningChunk(
   progress: vscode.Progress<vscode.LanguageModelResponsePart>,
   text: string,
+  enabled: boolean,
 ): void {
+  if (!enabled) {
+    return;
+  }
   if (thinkingPartSupported) {
     progress.report(new vscode.LanguageModelThinkingPart(text) as vscode.LanguageModelResponsePart);
-  } else {
-    progress.report(new vscode.LanguageModelTextPart(text));
   }
+  // When the proposed API is unavailable, drop the chunk instead of falling
+  // back to a TextPart that VS Code would persist into history.
 }
 
 // Memoized token estimator shared across provideTokenCount calls so repeated
@@ -114,6 +123,20 @@ function createClient(): CodeBuddyClient {
     accessToken,
     userId: config.get<string>('userId', '') || undefined,
   });
+}
+
+/** Read the enterprise id from settings, trimmed and empty-aware. */
+function readEnterpriseId(): string | undefined {
+  const config = vscode.workspace.getConfiguration('codebuddy');
+  const enterpriseId = config.get<string>('enterpriseId', '') ?? '';
+  const trimmed = enterpriseId.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** Read whether reasoning_content handling is enabled. Defaults to true. */
+function readEnableReasoning(): boolean {
+  const config = vscode.workspace.getConfiguration('codebuddy');
+  return config.get<boolean>('enableReasoning', true) !== false;
 }
 
 function toModelInformation(model: ModelInfo): vscode.LanguageModelChatInformation {
@@ -177,20 +200,21 @@ export function createDefaultRegistryDeps(): ConstructorParameters<typeof ModelR
     return {
       accessToken: token,
       userId: config.get<string>('userId', '') || undefined,
+      enterpriseId: readEnterpriseId(),
     };
   };
 
   return {
     ttlMs: ttlSeconds * 1000,
     async fetchCatalog() {
-      const { accessToken, userId } = readToken();
+      const { accessToken, userId, enterpriseId } = readToken();
       if (!accessToken) {
         throw vscode.LanguageModelError.NoPermissions(
           'CodeBuddy access token is not configured. Set "codebuddy.accessToken" in your settings, ' +
             `or the "${CODEBUDDY_TOKEN_ENV_VAR}" environment variable.`,
         );
       }
-      const result = await fetchModelCatalog({ accessToken, userId });
+      const result = await fetchModelCatalog({ accessToken, userId, enterpriseId });
       return result.models;
     },
     readLocal: readLocalModelsConfig,
@@ -254,9 +278,11 @@ export function registerCodeBuddyProvider(
     },
 
     provideLanguageModelChatResponse: async (model, messages, options, progress, token) => {
+      const enableReasoning = readEnableReasoning();
       log(
         `→ request model=${model.id} messages=${messages.length} ` +
-          `tools=${(options.tools ?? []).length} toolMode=${options.toolMode}`,
+          `tools=${(options.tools ?? []).length} toolMode=${options.toolMode} ` +
+          `enableReasoning=${enableReasoning}`,
       );
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
@@ -339,10 +365,12 @@ export function registerCodeBuddyProvider(
               }
               // reasoning_content: DeepSeek thinking stream (proposed API).
               // Report it as a LanguageModelThinkingPart so Copilot renders it
-              // separately from the final text; fall back to a text part when
-              // the proposal is unavailable at runtime.
+              // separately from the final text. Gated by the
+              // `codebuddy.enableReasoning` setting (default true). When the
+              // proposed API is unavailable or the setting is off, the chunk is
+              // dropped so it never pollutes the conversation history.
               if (typeof delta.reasoning_content === 'string' && delta.reasoning_content !== '') {
-                reportReasoningChunk(progress, delta.reasoning_content);
+                reportReasoningChunk(progress, delta.reasoning_content, enableReasoning);
               }
               if (typeof delta.content === 'string' && delta.content !== '') {
                 contentChars += delta.content.length;

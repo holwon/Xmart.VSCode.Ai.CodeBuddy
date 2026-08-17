@@ -51,6 +51,16 @@
           "default": 1800,
           "minimum": 30,
           "markdownDescription": "How long (in seconds) to keep the fetched model list before refreshing it automatically. Minimum 30. Use the `CodeBuddy: Refresh Models` command to refresh immediately."
+        },
+        "codebuddy.enterpriseId": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "CodeBuddy enterprise id. When set, the model list is fetched from `/console/enterprises/{enterpriseId}/config/models`; when empty, it falls back to `/console/enterprises/personal/models`."
+        },
+        "codebuddy.enableReasoning": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When enabled (default), `reasoning_content` from the model (e.g. DeepSeek thinking) is surfaced as a `LanguageModelThinkingPart`. When disabled, reasoning chunks are ignored to avoid inflating context history and token consumption."
         }
       }
     },

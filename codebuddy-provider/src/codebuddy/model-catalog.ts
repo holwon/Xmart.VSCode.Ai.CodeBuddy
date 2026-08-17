@@ -17,7 +17,11 @@ import { URL } from 'node:url';
 import { CodeBuddyApiError } from './client';
 import { detectCodeBuddyError } from './dto';
 
-/** Community-verified remote model-directory endpoint (ADR-0001). */
+/**
+ * Default remote model-directory endpoint. Kept for backward compatibility and
+ * as the personal-user fallback. Prefer `resolveModelsEndpoint(enterpriseId)`
+ * which picks the enterprise or personal path based on configuration.
+ */
 export const CODEBUDDY_MODELS_ENDPOINT = 'https://copilot.tencent.com/console/enterprises/personal/models';
 
 /** Conservative fallback when contextWindow/maxTokens parse fails. */
@@ -95,9 +99,26 @@ const defaultTransport: CatalogTransport = {
 export interface FetchModelCatalogOptions {
   accessToken: string;
   userId?: string;
+  enterpriseId?: string;
   endpoint?: string;
   timeoutMs?: number;
   transport?: CatalogTransport;
+}
+
+/** Base models endpoint shared by both personal and enterprise paths. */
+const CODEBUDDY_MODELS_BASE = 'https://copilot.tencent.com/console/enterprises';
+
+/**
+ * Resolve the models endpoint URL. When `enterpriseId` is provided we hit the
+ * enterprise-scoped `/config/models` path (matching the official plugin);
+ * otherwise we fall back to the community-verified `/personal/models` path.
+ */
+export function resolveModelsEndpoint(enterpriseId?: string): string {
+  const id = enterpriseId?.trim();
+  if (id && id.length > 0) {
+    return `${CODEBUDDY_MODELS_BASE}/${encodeURIComponent(id)}/config/models`;
+  }
+  return `${CODEBUDDY_MODELS_BASE}/personal/models`;
 }
 
 /** Default per-request timeout for the catalog endpoint. */
@@ -113,7 +134,9 @@ const REQUEST_TIMEOUT_MS = 15_000;
 export async function fetchModelCatalog(
   options: FetchModelCatalogOptions,
 ): Promise<ModelCatalogResult> {
-  const endpoint = new URL(options.endpoint ?? CODEBUDDY_MODELS_ENDPOINT);
+  const endpoint = new URL(
+    options.endpoint ?? resolveModelsEndpoint(options.enterpriseId),
+  );
   const transport = options.transport ?? defaultTransport;
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
 

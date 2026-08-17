@@ -26,11 +26,16 @@ Open VS Code settings (User or Workspace) and set:
 |---|---|
 | `codebuddy.accessToken` | Your CodeBuddy access token (stored securely). Required unless the env var below is set. |
 | `codebuddy.userId` | Your CodeBuddy account uid (optional — when empty the `X-No-User-Id: 1` fallback is used). |
+| `codebuddy.modelsCacheTtlSeconds` | Number of seconds to cache the fetched model list before auto-refreshing (default `1800`, minimum `30`). Use the `CodeBuddy: Refresh Models` command to refresh immediately. |
+| `codebuddy.enterpriseId` | Enterprise id (optional). When set, the model list is fetched from `/console/enterprises/{enterpriseId}/config/models`; when empty, it falls back to `/console/enterprises/personal/models`. Set this if your account belongs to a CodeBuddy enterprise tenant. |
+| `codebuddy.enableReasoning` | Boolean, default `true`. When enabled, `reasoning_content` from reasoning models (e.g. DeepSeek thinking) is surfaced as a separate `LanguageModelThinkingPart`. When disabled, reasoning chunks are ignored — this also prevents the reasoning text from being persisted into the conversation history on later turns, which would otherwise inflate input-token consumption. |
 
 ```json
 {
   "codebuddy.accessToken": "ck_...",
-  "codebuddy.userId": ""
+  "codebuddy.userId": "",
+  "codebuddy.enterpriseId": "",
+  "codebuddy.enableReasoning": true
 }
 ```
 
